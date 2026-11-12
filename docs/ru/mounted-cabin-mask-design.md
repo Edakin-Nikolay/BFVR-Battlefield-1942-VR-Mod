@@ -1,0 +1,102 @@
+# Маска кабины техники (P10) — дизайн
+
+Статус: **дизайн + чистая математика готовы 13.11.2026**. Runtime-интеграция
+(P10.1–P10.3) не начата. Ветка `feature/v1.0.4-next`, отдельные каталоги
+`build/bfvr-win32-next`; стабильный `feature/v1.0.4` и полигон `test2` не
+затрагиваются.
+
+## Проблема
+
+По скриншотам 12.11.2026: в танке BF1942 рисует только тёмную маску вокруг
+смотровой щели. Presentation-камера в VR = нативная камера + head delta,
+поэтому при повороте головы виден край маски и мир за ней; интерьерной
+геометрии на 360° в игре нет. Позиционный clamp (P0.5) это не решает.
+
+## Выбранное решение
+
+1. **Основное (P10.2):** экранная маска 360° с вырезом по направлению нативной
+   камеры (смотровой щели). Вне окна — темнота; внутри — обычный мир.
+2. **Fallback (P10.4):** ограничение направления взгляда окном щели
+   (`ClampForwardToMountedCabinWindow`), если маска окажется хуже/дороже.
+
+Маска не заменяет нативную маску игры: она закрывает области, где интерьера
+нет. HUD/меню/прицел остаются выше по слоям.
+
+## Математика (реализовано)
+
+`src/stereo/MountedCabinMaskMath.*`:
+
+- `MountedCabinWindow` — ориентация нативной камеры (`forward/right/up`) и
+  половины углов окна (`halfHorizontalRadians`, `halfVerticalRadians`) плюс
+  ширина мягкого края `featherRadians`.
+- `EvaluateMountedCabinMask(viewForwardWorld, window)`:
+  - проецирует направление взгляда в оси окна;
+  - `h = atan2(dot(view,right), dot(view,forward))`,
+    `v = atan2(dot(view,up), dot(view,forward))`;
+  - `inside` = `|h| <= halfH && |v| <= halfV`;
+  - `alpha` 0 внутри, 1 снаружи, smoothstep в полосе `feather`;
+  - направление позади окна (`forward <= 0`) — alpha 1;
+  - non-finite/неортогональные оси — fail-closed (`nullopt`).
+- `ClampForwardToMountedCabinWindow` — зажимает h/v в окно и собирает
+  нормализованное направление; roll не сохраняется (это fallback-политика).
+
+Тесты: `src/stereo/MountedCabinMaskMathTests.cpp` — центр/внутри, feather,
+снаружи, позади, невалидное окно, clamp. В отдельной сборке — 38/38.
+
+## Runtime-интеграция (план)
+
+### P10.1 — публикация окна из x86
+
+- В mounted-блоке `D3D8RenderViewPoseHook.cpp` уже есть `cameraSource`
+  (нативная камера до head-композиции). Из него брать `forward/right/up`.
+- Половины углов: из нативного FOV камеры с калибровочным сужением под щель
+  (начальные значения — параметры, не «геометрия hull»). Протокол:
+  `kProtocolVersion + 1`, поля:
+  - `volatile LONG mountedCabinMaskValid`;
+  - `SharedPresentationPose mountedCabinOrientation` (или 3 вектора);
+  - `float mountedCabinHalfHorizontal`, `mountedCabinHalfVertical`,
+    `mountedCabinFeather`;
+  - `volatile LONG mountedCabinMaskEnabled`.
+- Публиковать только при occupied mounted station и не в scope; иначе
+  `maskValid = 0` (presenter fail-closed).
+
+### P10.2 — маска в presenter
+
+- Полноэкранный per-eye квад в VIEW space; в шейдере направление луча
+  восстанавливается из UV и FOV глаза, переводится в LOCAL/world, сравнивается
+  с окном (та же формула, что в pure math).
+- Порядок: projection → vignette → **mask** → scope → Ref2 UI → QuickMenu.
+  В scope маску не рисовать (или рисовать под scope-слоем).
+- Мягкий край из `feather`; прозрачность 1 вне окна, 0 внутри.
+- Desktop mirror получает маску автоматически, если она рисуется в eye-targets;
+  иначе повторить в mirror тем же шейдером.
+
+### P10.4 — fallback
+
+- В x86 mounted-блоке: если маска отключена настройкой, применять
+  `ClampForwardToMountedCabinWindow` к итоговому forward камеры (позиция
+  сохраняется). Настройка `mounted_cabin_mask_mode = mask | clamp | off`
+  (по умолчанию `mask` после подтверждения в шлеме; до этого — `off`).
+
+## Калибровка
+
+- Начальные half-angles подобрать по скриншотам: щель уже полного FOV камеры.
+- Проверить на танке и самолёте, в coupled и decoupled режимах.
+- Проверить, что маска не перекрывает HUD, scope, Quick Menu и не мерцает на
+  краях.
+
+## Приёмка
+
+- Pure math: 38/38 в `build/bfvr-win32-next` (сделано).
+- Шлем: при повороте головы вне щели — темнота без «края маски»; внутри щели
+  картинка идентична прежней; башня не крутится головой; HUD/меню читаемы;
+  нет просадки (`BFVR_PERFORMANCE_SUMMARY=1`).
+- Desktop mirror и оба глаза согласованы.
+
+## Риски / открытые вопросы
+
+- Реальная форма щели не прямоугольная; калибровка углов — приближение.
+- Маска может скрывать полезные части кокпита (приборы), которых в VR и так
+  нет; решение — после шлема.
+- Слой маски не должен ломать Oasis/композицию и порядок `xrEndFrame`.
+- Нужен ли отдельный `off` для игроков, которым текущее поведение нравится.

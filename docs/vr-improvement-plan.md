@@ -369,6 +369,10 @@ P10 (кабина техники) выделен после прогона 12.11
 
 ### P10. Техника: обзор из кабины (п.5, вторая итерация)
 
+Статус 13.11.2026: дизайн (`docs/ru/mounted-cabin-mask-design.md`) и pure math
+(`src/stereo/MountedCabinMaskMath.*` + tests) готовы; 38/38 в отдельной ветке
+`feature/v1.0.4-next`. Runtime P10.1–P10.3 не начат.
+
 | ID | Задача | Зависит | Файлы/действия | Критерий приёмки | Агент |
 |---|---|---|---|---|---|
 | P10.1 | Публикация slit-forward/FOV из x86 в presenter | P0.5 | `SharedPresentationProtocol.h` (версия +1), `D3D8RenderViewPoseHook.cpp` | presenter получает направление и угловой размер нативного окна | main |
