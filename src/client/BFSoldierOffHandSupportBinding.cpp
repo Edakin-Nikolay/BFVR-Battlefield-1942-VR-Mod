@@ -179,6 +179,24 @@ BFSoldierOffHandSupportBinding::Update(
         {
             closeLeftHandFromRightHandLocal_ = *relation;
             closeRelationValid_ = true;
+            if (input.diagnostics.appendLog != nullptr)
+            {
+                std::array<wchar_t, 320> message = {};
+                _snwprintf_s(
+                    message.data(), message.size(), _TRUNCATE,
+                    L"Close sidearm cup captured: soldier=%p item=%p "
+                    L"activeItemIndex=%ld localOffsetCm=(%.1f,%.1f,%.1f) "
+                    L"acquisitionDistanceCm=%.2f. This offset is held "
+                    L"relative to the right hand until release.",
+                    input.diagnostics.soldier,
+                    input.diagnostics.activeItem,
+                    input.diagnostics.activeItemIndex,
+                    closeLeftHandFromRightHandLocal_.values[3][0] * 100.0F,
+                    closeLeftHandFromRightHandLocal_.values[3][1] * 100.0F,
+                    closeLeftHandFromRightHandLocal_.values[3][2] * 100.0F,
+                    acquisitionDistance * 100.0F);
+                input.diagnostics.appendLog(message.data());
+            }
             pose =
                 stereo::ComputeOffHandCapturedCloseSupportPose(
                     closeLeftHandFromRightHandLocal_,
