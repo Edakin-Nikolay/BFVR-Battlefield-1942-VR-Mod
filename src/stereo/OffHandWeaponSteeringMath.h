@@ -20,9 +20,11 @@ struct OffHandWeaponSteeringResult
 // Rotates a right-authoritative gun basis minimally about its fixed
 // translation pivot so the predicted authored support direction approaches
 // the tracked left hand. Radial mismatch is ignored and no scale is applied.
-// Degenerate and non-finite spans fail closed. An exact opposite direction
-// uses a deterministic gun-basis axis so crossing the far side cannot switch
-// between a capped positive and negative swing.
+// Steering fades out when both hand spans fall below a full foregrip distance,
+// so a close two-hand grip cannot amplify positional micro-motion into a large
+// swing. Degenerate and non-finite spans fail closed. An exact opposite
+// direction uses a deterministic gun-basis axis so crossing the far side cannot
+// switch between a capped positive and negative swing.
 [[nodiscard]] std::optional<OffHandWeaponSteeringResult>
 ComputeBoundedOffHandWeaponSteering(
     const Matrix4& controllerGunWorld,

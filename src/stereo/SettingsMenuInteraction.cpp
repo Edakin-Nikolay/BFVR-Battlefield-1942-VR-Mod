@@ -556,7 +556,7 @@ const wchar_t* SettingsMenuSelectionName(
     case SettingsMenuSelection::ControllerHapticsEnabled:
         return L"Controller Haptics";
     case SettingsMenuSelection::SniperScopeSmoothingEnabled:
-        return L"Sniper Aim Smoothing";
+        return L"Aim Smoothing";
     case SettingsMenuSelection::VehicleMotionAimSensitivity:
         return L"Vehicle Turret Motion Sensitivity slider";
     case SettingsMenuSelection::AircraftPitchWithRoll:

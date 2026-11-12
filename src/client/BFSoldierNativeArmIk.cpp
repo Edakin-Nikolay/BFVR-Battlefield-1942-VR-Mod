@@ -17,10 +17,12 @@
 #include "client/BFSoldierWristPositionBinding.h"
 #include "client/HandWeaponRecoilRuntime.h"
 #include "client/WeaponPoseRuntimeCache.h"
+#include "client/ScopeViewOverlay.h"
 #include "presenter/SharedPresentationProtocol.h"
 #include "settings/UserSettings.h"
 #include "stereo/StereoMath.h"
 #include "stereo/ArmVrPoseMath.h"
+#include "stereo/ScopeViewMath.h"
 #include "stereo/WeaponFireAimMath.h"
 #include "stereo/WeaponPoseMath.h"
 #include <MinHook.h>
@@ -1377,6 +1379,42 @@ private:
                     }
                 }
             }
+            // Bounded angular stabilization for the ordinary held weapon.
+            // Micro-tremor below the established 1.5-degree boundary is
+            // attenuated; deliberate motion passes through raw. The scoped
+            // path keeps its own separate stabilization pass, so this filter
+            // is bypassed while an exact owned scope is active.
+            if (armSettings.sniperScopeSmoothingEnabled &&
+                !bfvr::IsScopeViewActive())
+            {
+                const auto smoothedGun =
+                    bfvr::stereo::UpdateD3D8ScopeAimSmoothing(
+                        handWeaponAimSmoothing_,
+                        controllerGunWorld,
+                        alignment.activeItem,
+                        soldier,
+                        static_cast<std::int32_t>(generation),
+                        sample.predictedDisplayTime,
+                        true);
+                if (smoothedGun.has_value())
+                {
+                    const auto smoothedHand =
+                        bfvr::stereo::
+                            MakeD3D8ControllerDirectedNativeHandMatrix(
+                                *smoothedGun,
+                                alignment.handFromFire);
+                    if (smoothedHand.has_value())
+                    {
+                        controllerGunWorld = *smoothedGun;
+                        correctedHandWorld = smoothedHand;
+                    }
+                }
+            }
+            else
+            {
+                bfvr::stereo::ResetD3D8ScopeAimSmoothing(
+                    handWeaponAimSmoothing_);
+            }
             const auto recoiledGunWorld =
                 bfvr::MakeCurrentHandWeaponRecoilPose(
                     controllerGunWorld,
@@ -2482,6 +2520,7 @@ private:
     bfvr::BFSoldierOffHandCalibration offHandCalibration_ = {};
     bfvr::BFSoldierOffHandSupportBinding offHandSupportBinding_ = {};
     bfvr::BFSoldierAttachmentPosePairer attachmentPosePairer_ = {};
+    bfvr::stereo::ScopeAimSmoothingState handWeaponAimSmoothing_ = {};
     std::uint64_t loggedPrimarySteeringBindingId_ = 0;
     void* loggedFreeLeftSoldier_ = nullptr;
     void* loggedFreeLeftSkeleton_ = nullptr;

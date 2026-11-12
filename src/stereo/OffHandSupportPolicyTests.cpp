@@ -1061,6 +1061,41 @@ bool SteeringIgnoresRadialMismatchAndHandlesOppositeDirection() noexcept
             "opposite support direction did not use a deterministic full swing");
 }
 
+bool SteeringAttenuatesCloseHandSpan() noexcept
+{
+    constexpr float kPi = 3.14159265358979323846F;
+    const float requested = 30.0F * kPi / 180.0F;
+    const auto gun = Translation(2.0F, 1.0F, -3.0F);
+    const auto predicted = Translation(2.0F, 1.0F, -2.92F);
+    const auto tracked = Translation(
+        2.0F + 0.08F * std::sin(requested),
+        1.0F,
+        -3.0F + 0.08F * std::cos(requested));
+    const auto result =
+        bfvr::stereo::ComputeBoundedOffHandWeaponSteering(
+            gun,
+            predicted,
+            tracked,
+            bfvr::stereo::kUnrestrictedOffHandWeaponSwingRadians,
+            1.0F);
+    if (!Expect(
+            result.has_value(),
+            "close valid support span was rejected"))
+    {
+        return false;
+    }
+    const float spanWeight = (0.08F - 0.05F) / (0.18F - 0.05F);
+    const float expected = requested * spanWeight;
+    return Expect(
+               std::fabs(result->appliedSwingRadians - expected) <
+                   0.0001F,
+               "close support span did not attenuate the applied swing") &&
+        Expect(
+            result->appliedSwingRadians > 0.0F &&
+                result->appliedSwingRadians < requested,
+            "close support span kept the full raw swing");
+}
+
 bool AcquireByProximityAndRetainUntilExplicitRelease() noexcept
 {
     OffHandSupportPolicy policy;
@@ -1289,6 +1324,7 @@ int main()
         SoldierSteeringFrameUsesTrackedGripAndRejectsPistol() &&
         SteeringUsesFixedPivotAndFullDirectionalSwing() &&
         SteeringIgnoresRadialMismatchAndHandlesOppositeDirection() &&
+        SteeringAttenuatesCloseHandSpan() &&
         AcquireByProximityAndRetainUntilExplicitRelease() &&
         BindingUsesModeSpecificAcquireRadii() &&
         RejectsUnsafeInputs() &&

@@ -15,6 +15,17 @@ the current version's section once it is released.
   the existing decoupled mounted camera is not altered. A diagnostic counter reports
   how often the clamp actually moved the head when diagnostics are enabled.
 
+### Changed
+
+- Aim Smoothing now also stabilizes the ordinary held weapon, not only the
+  scoped view. Hand micro-motion below the established 1.5-degree boundary is
+  attenuated while deliberate movement passes through raw; the scoped pass keeps
+  its own separate history. Controls > Aim Smoothing applies the change live.
+- Two-hand support steering now fades out when both hands are closer to the
+  right grip than a full foregrip span, so a close two-hand hold no longer turns
+  tiny positional errors into large weapon swings. A normal foregrip span keeps
+  the full directional response.
+
 ## [1.0.3] - 2026-10-24
 
 ### Added

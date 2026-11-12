@@ -60,6 +60,11 @@ float Dot(
         left.z * right.z;
 }
 
+float Length(const Direction& value) noexcept
+{
+    return std::sqrt(Dot(value, value));
+}
+
 Direction Cross(
     const Direction& left,
     const Direction& right) noexcept
@@ -127,6 +132,7 @@ ComputeBoundedOffHandWeaponSteering(
 {
     constexpr float kPi = 3.14159265358979323846F;
     constexpr float kMinimumSupportSpanMetres = 0.05F;
+    constexpr float kFullSteeringSpanMetres = 0.18F;
     constexpr float kDirectionEpsilon = 0.000001F;
     if (!IsFinite(controllerGunWorld) ||
         !IsFinite(predictedSupportWorld) ||
@@ -153,11 +159,29 @@ ComputeBoundedOffHandWeaponSteering(
         trackedLeftHandWorld.values[3][2] - pivotZ};
     const float minimumSpan =
         kMinimumSupportSpanMetres * worldUnitsPerMetre;
+    const float authoredSpan = Length(authored);
+    const float trackedSpan = Length(tracked);
+    if (authoredSpan < minimumSpan || trackedSpan < minimumSpan)
+    {
+        return std::nullopt;
+    }
     if (!Normalize(authored, minimumSpan) ||
         !Normalize(tracked, minimumSpan))
     {
         return std::nullopt;
     }
+
+    // Hands close to the right-grip pivot turn a small positional error into a
+    // large angular one. Fade steering out below a full support span so the
+    // two-hand grip stays stable instead of amplifying micro-motion; a normal
+    // foregrip span keeps the full directional response.
+    const float spanMetres =
+        std::min(authoredSpan, trackedSpan) / worldUnitsPerMetre;
+    const float spanWeight = std::clamp(
+        (spanMetres - kMinimumSupportSpanMetres) /
+            (kFullSteeringSpanMetres - kMinimumSupportSpanMetres),
+        0.0F,
+        1.0F);
 
     const float cosine =
         std::clamp(Dot(authored, tracked), -1.0F, 1.0F);
@@ -167,7 +191,7 @@ ComputeBoundedOffHandWeaponSteering(
         return std::nullopt;
     }
     const float appliedAngle =
-        std::min(requestedAngle, maximumSwingRadians);
+        std::min(requestedAngle * spanWeight, maximumSwingRadians);
     if (appliedAngle <= kDirectionEpsilon)
     {
         return OffHandWeaponSteeringResult{
