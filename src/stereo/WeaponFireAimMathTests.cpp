@@ -1,4 +1,5 @@
 #include "stereo/WeaponFireAimMath.h"
+#include "stereo/WorldCrosshairMath.h"
 #include "stereo/WeaponPoseMath.h"
 
 #include <cmath>
@@ -242,6 +243,75 @@ bool TestControllerAimDirectlyOwnsFireBasisAndOrigin()
                     native.values[3][2]),
             test,
             "orientation-only policy did not preserve native origin");
+}
+
+bool TestDirectedFireRayMatchesWorldCrosshairEndpoint()
+{
+    constexpr std::string_view test = "directed fire ray vs crosshair";
+    auto native = YawRightAngle();
+    native.values[3][0] = 100.0F;
+    native.values[3][1] = 25.0F;
+    native.values[3][2] = -40.0F;
+    const auto controllerGun = []() {
+        auto result = MultiplyMatrices(
+            PitchUpRightAngle(),
+            YawRightAngle());
+        result.values[3][0] = 101.25F;
+        result.values[3][1] = 24.75F;
+        result.values[3][2] = -39.50F;
+        return result;
+    }();
+    const auto directed =
+        bfvr::stereo::MakeD3D8ControllerDirectedWeaponFireMatrix(
+            native,
+            controllerGun,
+            true);
+    if (!Expect(
+            directed.has_value(),
+            test,
+            "valid controller gun pose was rejected"))
+    {
+        return false;
+    }
+    constexpr float kDistance = 100.0F;
+    const auto endpoint =
+        bfvr::stereo::MakeWorldCrosshairEndpointFromFirePose(
+            *directed,
+            kDistance);
+    if (!Expect(
+            endpoint.has_value(),
+            test,
+            "crosshair endpoint was rejected"))
+    {
+        return false;
+    }
+    const float deltaX =
+        endpoint->x - controllerGun.values[3][0];
+    const float deltaY =
+        endpoint->y - controllerGun.values[3][1];
+    const float deltaZ =
+        endpoint->z - controllerGun.values[3][2];
+    const float forwardX = directed->values[2][0];
+    const float forwardY = directed->values[2][1];
+    const float forwardZ = directed->values[2][2];
+    const float length = std::sqrt(
+        deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+    const float projection =
+        deltaX * forwardX + deltaY * forwardY + deltaZ * forwardZ;
+    const float lateralX = deltaX - forwardX * projection;
+    const float lateralY = deltaY - forwardY * projection;
+    const float lateralZ = deltaZ - forwardZ * projection;
+    const float lateral = std::sqrt(
+        lateralX * lateralX + lateralY * lateralY +
+        lateralZ * lateralZ);
+    return Expect(
+               NearlyEqual(length, kDistance),
+               test,
+               "crosshair endpoint distance differs from the requested range") &&
+        Expect(
+            projection > 0.0F && lateral < 0.001F,
+            test,
+            "crosshair endpoint left the controller fire axis");
 }
 
 bool TestNativeHandPreservesAuthoredFireToWristRotation()
@@ -820,6 +890,7 @@ int main()
         TestNeutralVisualWeaponPreservesNativeFireMatrix() &&
         TestRenderedWeaponForwardBecomesFireForward() &&
         TestControllerAimDirectlyOwnsFireBasisAndOrigin() &&
+        TestDirectedFireRayMatchesWorldCrosshairEndpoint() &&
         TestNativeHandPreservesAuthoredFireToWristRotation() &&
         TestAnatomicalHandRecoversItemFunctionalBasis() &&
         TestLegacyCameraRecoilBecomesHeldWeaponRecoil() &&
