@@ -3,6 +3,18 @@
 This file records user-visible changes to BFVR. GitHub Release notes should use
 the current version's section once it is released.
 
+## [Unreleased]
+
+### Added
+
+- The mounted (tank and aircraft) VR head offset is now clamped to the station
+  interior volume, so the head cannot move outside the hull and "look through"
+  armor. The clamp measures the head offset in the vehicle's own axes, reduces only
+  the axis that crosses a boundary, and leaves the camera orientation unchanged.
+  Inside the volume the presented camera is identical to the previous behavior, so
+  the existing decoupled mounted camera is not altered. A diagnostic counter reports
+  how often the clamp actually moved the head when diagnostics are enabled.
+
 ## [1.0.3] - 2026-10-24
 
 ### Added

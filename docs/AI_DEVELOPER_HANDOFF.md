@@ -283,6 +283,27 @@ These are established behaviors, not cleanup opportunities.
   only that shared indexed terrain-cell submission; do not spend its budget on
   unrelated alpha-blended perspective draws.
 
+### Mounted station head offset
+
+- The mounted (land and air) presentation camera is composed from the native
+  station anchor and the runtime head offset, then the head offset is clamped to
+  the station interior volume in `src/stereo/MountedCameraMath.*`.
+- The clamp measures the head offset in the station's own axes, clamps per axis to
+  the half extents of the named volume, and re-adds the reduced offset to the
+  captured anchor. Orientation is never modified, so the mounted camera remains the
+  established decoupled camera: the UI toggle and monotonic edge tracking are not
+  touched by this policy.
+- Inside the volume the clamped camera must equal the unclamped composition within
+  `0.0001F`. Only an offset that would leave the hull is reduced, and only the axis
+  that actually crosses a boundary changes.
+- Hull volumes are named constants in the pure-math layer, not measured game
+  geometry: `kTankStationVolume` is the default envelope, `kAircraftStationVolume`
+  applies to the air class, and `Unknown` resolves to the default. The station query
+  exposes no vehicle class, so do not invent per-class data.
+- Invalid offsets, degenerate volumes, and non-rigid inputs fail closed, and the
+  hook falls back to the original transformation. The clamp counter increments only
+  when the clamp actually moves the head.
+
 ### Frame limiter
 
 - BFVR disables BF1942's internal `lockFps` value only inside the BFVR-launched

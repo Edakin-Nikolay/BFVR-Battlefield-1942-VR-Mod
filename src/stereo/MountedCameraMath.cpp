@@ -7,6 +7,8 @@
 namespace
 {
 using bfvr::stereo::Matrix4;
+using bfvr::stereo::Vec3;
+using bfvr::stereo::Vec4;
 
 bool IsFinite(const Matrix4& matrix) noexcept
 {
@@ -21,6 +23,25 @@ bool IsFinite(const Matrix4& matrix) noexcept
         }
     }
     return true;
+}
+
+bool IsFinite(const Vec3& value) noexcept
+{
+    return std::isfinite(value.x) &&
+        std::isfinite(value.y) &&
+        std::isfinite(value.z);
+}
+
+// Copy of a rigid transform with its translation row cleared, so a row-vector
+// product applies only its orientation.
+Matrix4 RotationOnly(const Matrix4& matrix) noexcept
+{
+    Matrix4 result = matrix;
+    for (std::size_t column = 0; column < 4; ++column)
+    {
+        result.values[3][column] = column == 3 ? 1.0F : 0.0F;
+    }
+    return result;
 }
 
 bool IsRigidAffine(const Matrix4& matrix) noexcept
@@ -147,6 +168,100 @@ std::optional<Matrix4> ComposeD3D8MountedCameraFromAnchor(
     const Matrix4 cameraWorld = Multiply(cameraInStation, stationWorld);
     return IsRigidAffine(cameraWorld)
         ? std::optional<Matrix4>(cameraWorld)
+        : std::nullopt;
+}
+
+std::optional<Vec3> ClampStationLocalOffset(
+    const Vec3& offsetInStation,
+    const MountedStationVolume& volume) noexcept
+{
+    if (!IsFinite(offsetInStation) ||
+        !std::isfinite(volume.halfWidth) ||
+        !std::isfinite(volume.halfHeight) ||
+        !std::isfinite(volume.halfDepth) ||
+        volume.halfWidth <= 0.0F ||
+        volume.halfHeight <= 0.0F ||
+        volume.halfDepth <= 0.0F)
+    {
+        return std::nullopt;
+    }
+
+    return Vec3{
+        std::clamp(offsetInStation.x, -volume.halfWidth, volume.halfWidth),
+        std::clamp(offsetInStation.y, -volume.halfHeight, volume.halfHeight),
+        std::clamp(offsetInStation.z, -volume.halfDepth, volume.halfDepth)};
+}
+
+const MountedStationVolume& SelectMountedStationVolume(
+    MountedStationClass stationClass) noexcept
+{
+    switch (stationClass)
+    {
+        case MountedStationClass::Air:
+            return kAircraftStationVolume;
+        case MountedStationClass::Land:
+            return kTankStationVolume;
+        case MountedStationClass::Unknown:
+        default:
+            return kDefaultMountedStationVolume;
+    }
+}
+
+std::optional<Matrix4> ClampD3D8HeadOffsetToStationVolume(
+    const Matrix4& composedCameraWorld,
+    const Matrix4& cameraInStation,
+    const Matrix4& stationWorld,
+    const MountedStationVolume& volume) noexcept
+{
+    if (!IsRigidAffine(composedCameraWorld) ||
+        !IsRigidAffine(cameraInStation) ||
+        !IsRigidAffine(stationWorld))
+    {
+        return std::nullopt;
+    }
+
+    // Row-vector convention maps a world-space point through the object
+    // transform, so a world-space direction enters the station's own axes
+    // through the transpose of the station rotation.
+    const auto inverseStation = Invert(stationWorld);
+    if (!inverseStation.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const Matrix4 anchorWorld = Multiply(cameraInStation, stationWorld);
+    if (!IsFinite(anchorWorld))
+    {
+        return std::nullopt;
+    }
+
+    const Vec4 headOffsetWorld{
+        composedCameraWorld.values[3][0] - anchorWorld.values[3][0],
+        composedCameraWorld.values[3][1] - anchorWorld.values[3][1],
+        composedCameraWorld.values[3][2] - anchorWorld.values[3][2],
+        0.0F};
+    const Vec4 offsetInStation = bfvr::stereo::TransformRowVector(
+        headOffsetWorld,
+        RotationOnly(*inverseStation));
+
+    const auto clamped = ClampStationLocalOffset(
+        {offsetInStation.x, offsetInStation.y, offsetInStation.z},
+        volume);
+    if (!clamped.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const Vec4 clampedOffsetWorld = bfvr::stereo::TransformRowVector(
+        {clamped->x, clamped->y, clamped->z, 0.0F},
+        RotationOnly(stationWorld));
+
+    Matrix4 result = composedCameraWorld;
+    result.values[3][0] = anchorWorld.values[3][0] + clampedOffsetWorld.x;
+    result.values[3][1] = anchorWorld.values[3][1] + clampedOffsetWorld.y;
+    result.values[3][2] = anchorWorld.values[3][2] + clampedOffsetWorld.z;
+    return IsRigidAffine(result)
+        ? std::optional<Matrix4>(result)
         : std::nullopt;
 }
 

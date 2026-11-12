@@ -523,7 +523,7 @@ public:
     {
         hudToggle.LogSummary();
         WriteLog(
-            L"RenderView pose/frustum-hook summary: setterMatches=%ld setterApplied=%ld setterRejected=%ld infantryComfortApplied=%ld infantryComfortRejected=%ld trackingContextChanges=%ld scopedApplied=%ld scopedRejected=%ld scopeDeathFovRestores=%ld scopeDeathFovRestoreFailures=%ld frustumMatches=%ld frustumApplied=%ld mountedFrustumApplied=%ld frustumNoSource=%ld frustumRejected=%ld mountedAnchorCaptures=%ld mountedDecoupled=%ld mountedRejected=%ld mountedResets=%ld mountedToggles=%ld mountedToggleIgnored=%ld fireCameraTraceFrames=%ld lastRequested=%ld lastApplied=%ld lastFrustum=%ld.",
+            L"RenderView pose/frustum-hook summary: setterMatches=%ld setterApplied=%ld setterRejected=%ld infantryComfortApplied=%ld infantryComfortRejected=%ld trackingContextChanges=%ld scopedApplied=%ld scopedRejected=%ld scopeDeathFovRestores=%ld scopeDeathFovRestoreFailures=%ld frustumMatches=%ld frustumApplied=%ld mountedFrustumApplied=%ld frustumNoSource=%ld frustumRejected=%ld mountedAnchorCaptures=%ld mountedDecoupled=%ld mountedHeadClamps=%ld mountedRejected=%ld mountedResets=%ld mountedToggles=%ld mountedToggleIgnored=%ld fireCameraTraceFrames=%ld lastRequested=%ld lastApplied=%ld lastFrustum=%ld.",
             matchingCalls,
             appliedCalls,
             rejectedTransforms,
@@ -541,6 +541,7 @@ public:
             frustumRejected,
             mountedAnchorCaptures,
             mountedDecoupledCalls,
+            mountedHeadClamps,
             mountedRejected,
             mountedResets,
             mountedToggles,
@@ -834,6 +835,41 @@ private:
         }
 
         stereo::Matrix4 finalCamera = *adjusted;
+        if (mountedCameraAnchorValid &&
+            mountedControlObject == station.controlObject)
+        {
+            // The head keeps its own orientation, but its offset from the
+            // station anchor cannot leave the hull interior. A head already
+            // inside the volume is presented exactly as before, so the
+            // decoupled-camera behavior and the scoped path are unchanged; only
+            // an offset that would put the head inside or behind armor is
+            // reduced to the nearest boundary of the volume.
+            const auto clamped = stereo::ClampD3D8HeadOffsetToStationVolume(
+                finalCamera,
+                mountedCameraInStation,
+                station.stationWorld,
+                stereo::SelectMountedStationVolume(
+                    stereo::MountedStationClass::Unknown));
+            if (!clamped.has_value())
+            {
+                // Fail closed to BF1942's own view rather than presenting a head
+                // that cannot be kept inside the hull.
+                InterlockedIncrement(&mountedRejected);
+                original(renderView, transformation);
+                return;
+            }
+            constexpr float kClampEffectTolerance = 0.0001F;
+            if (std::fabs(clamped->values[3][0] - finalCamera.values[3][0]) >
+                    kClampEffectTolerance ||
+                std::fabs(clamped->values[3][1] - finalCamera.values[3][1]) >
+                    kClampEffectTolerance ||
+                std::fabs(clamped->values[3][2] - finalCamera.values[3][2]) >
+                    kClampEffectTolerance)
+            {
+                InterlockedIncrement(&mountedHeadClamps);
+            }
+            finalCamera = *clamped;
+        }
         ScopeViewFrameState scope = {};
         if (ReadScopeViewFrameState(scope))
         {
@@ -1346,6 +1382,7 @@ private:
     volatile LONG mountedResets = 0;
     volatile LONG mountedToggles = 0;
     volatile LONG mountedToggleIgnored = 0;
+    volatile LONG mountedHeadClamps = 0;
     volatile LONG fireCameraTraceFrames = 0;
     volatile LONG requestedMountedCameraToggleSequence = 0;
     volatile LONG mountedCameraDecoupled = 0;

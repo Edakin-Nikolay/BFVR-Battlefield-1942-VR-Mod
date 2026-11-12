@@ -147,7 +147,7 @@ if(BFVR_PRESENTER_ONLY)
     set_property(TARGET ${target} PROPERTY
       MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     if(MSVC)
-      target_compile_options(${target} PRIVATE /W4 /permissive-)
+      target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
     endif()
   endforeach()
   target_link_libraries(BFVRPresenter PRIVATE xaudio2)
@@ -565,7 +565,7 @@ foreach(target BFVRClient BFVRD3D8To9FlatClient BFVRLoader BFVRBf42PlusPlusCompa
   target_compile_definitions(${target} PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
   set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /permissive-)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
   endif()
 endforeach()
 
@@ -574,7 +574,7 @@ target_compile_definitions(BFVRHudToggleTests PRIVATE
 set_property(TARGET BFVRHudToggleTests PROPERTY
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(MSVC)
-  target_compile_options(BFVRHudToggleTests PRIVATE /W4 /permissive-)
+  target_compile_options(BFVRHudToggleTests PRIVATE /W4 /permissive- /utf-8)
 endif()
 
 target_link_libraries(BFVRClient PRIVATE
