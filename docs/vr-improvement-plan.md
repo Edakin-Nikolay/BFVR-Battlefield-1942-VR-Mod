@@ -381,12 +381,12 @@ P10 (кабина техники) выделен после прогона 12.11
 
 | ID | Задача | Зависит | Файлы/действия | Критерий приёмки | Агент |
 |---|---|---|---|---|---|
-| P11.1 | Research: источники здоровья/патронов (native HUD, Player/Item, Ref2) | — | `BF1942HudToggle.cpp`, `D3D8StereoPairProbe.cpp`, `PlayerInputProbe.cpp`, Ghidra | отчёт: какие значения читаются без записи в игру | general |
-| P11.2 | Research: якоря рендера (OpenXR quad к кисти/предплечью, D3D8 overlay, кости) | — | `OpenXRPresentation.cpp`, `DesktopMirror.cpp`, `BFSoldierNativeArmIk.cpp` | список вариантов с ценой/риском | general |
-| P11.3 | MVP: здоровье на предплечье свободной руки | P11.1, P11.2 | новый overlay + протокол (версия +1) | читается в шлеме, не перекрывает оружие | main + USER-VERIFY |
-| P11.4 | MVP: патроны на магазине/оружии | P11.1, P11.2 | тот же канал данных | счётчик совпадает с HUD | main + USER-VERIFY |
-| P11.5 | UX-дизайн: когда показывать, размеры, левша/правша, производительность | P11.3 | `docs/ru/immersive-ui-design.md` | согласованный дизайн до реализации | main + user |
-| P11.6 | Тесты/перф + шлем | P11.3–P11.5 | pure math + `BFVR_PERFORMANCE_SUMMARY` | нет просадки, читаемо обоими глазами | main + USER-VERIFY |
+| P11.1 | RE: offset HP игрока и патронов активного item (Ghidra + live normal) | — | `BFSoldier`/`BFPlayer`, HudManager `0x0065F1A8`, `PlayerControlObject` | offset подтверждён на живом процессе; fail-closed | general |
+| P11.2 | `ForearmPanelRenderer`: D3D8-квад в оба eye-target, атлас цифр, save/restore | P11.1 | `D3D8WorldCrosshairRenderer.cpp` как образец | панель следует за левой кистью, параллакс обоих глаз | general |
+| P11.3 | MVP: здоровье на левом предплечье + гейты alive/scope/arms + настройка | P11.2 | `BFSoldierBoneResolver`, `UserSettings` | читается в шлеме, не перекрывает оружие, default off | main + USER-VERIFY |
+| P11.4 | MVP: патроны на магазине/оружии | P11.2 | `WeaponPoseRuntimeCache` | счётчик совпадает с HUD | main + USER-VERIFY |
+| P11.5 | UX-дизайн: размеры, наклон, когда показывать, левша/правша | P11.3 | `docs/ru/immersive-ui-design.md` | согласованный дизайн до реализации | main + user |
+| P11.6 | Перф + шлем + docs/CHANGELOG | P11.3–P11.5 | `BFVR_PERFORMANCE_SUMMARY=1` | нет просадки, читаемо обоими глазами | main + USER-VERIFY |
 
 ### P3. Ручная перезарядка (п.4)
 
