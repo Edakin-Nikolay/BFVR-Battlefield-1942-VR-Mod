@@ -341,7 +341,7 @@ P10 (кабина техники) выделен после прогона 12.11
 |---|---|---|---|---|---|
 | P1.1 | **Quick win:** включить `Hand Weapons` crosshair = `On`, проверить в шлеме | P0.5 | VR Settings → 3D Crosshair; либо `UserConfig.txt` | пользователь описал: стало ли понятнее, ушло ли «стреляет не туда» | USER-VERIFY |
 | P1.2 | Инвентаризация полей aim/fire в deep-логе (`WeaponFireProbe`) | — | `src/client/WeaponFireProbe.cpp`, `devREADME.md` (раздел fire) | таблица: поле → смысл → где пишется | extractor |
-| P1.3 | Детерминированный тест «muzzle ray vs fire ray» на фикстурах | P1.2 | `src/stereo/InfantryAuthoritativeAimTests.cpp` (+ helper при необходимости) | тест падает на искусственном расхождении >0.05° и проходит на совпадении; pure math | llama_pc черновик + main |
+| P1.3 | Детерминированный тест «muzzle ray vs fire ray» на фикстурах | P1.2 | `src/stereo/WeaponFireAimMathTests.cpp` (+ helper при необходимости) | тест падает на искусственном расхождении >0.05° и проходит на совпадении; pure math | llama_pc черновик + main |
 | P1.4 | Инструкция замера на Aberdeen (RU) | P1.2 | новый `docs/ru/aim-measurement-aberdeen.md` | шаги, дистанции 15/50/100 м, таблица выстрелов, куда класть скриншоты | text_routine |
 | P1.5 | Проведение замера в шлеме | P1.1, P1.4 | карта Aberdeen, офлайн | 10 выстрелов × 3 дистанции × 2–3 оружия; скриншоты в `screenshots/inbox` | USER-VERIFY |
 | P1.6 | Расчёт угловой ошибки по данным замера | P1.5 | таблица выстрелов + логи | таблица ошибок по оружию/дистанции; вывод: систематическая/случайная | json_calc + main |
