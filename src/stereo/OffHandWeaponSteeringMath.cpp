@@ -134,6 +134,11 @@ ComputeBoundedOffHandWeaponSteering(
     constexpr float kMinimumSupportSpanMetres = 0.05F;
     constexpr float kFullSteeringSpanMetres = 0.18F;
     constexpr float kDirectionEpsilon = 0.000001F;
+    // A support hand almost opposite the authored support direction makes the
+    // minimal rotation axis numerically unstable and can flip the weapon up or
+    // down. Fade steering out in this band and reject the far side entirely.
+    constexpr float kFadeStartRadians = 2.0943951023931953F; // 120 deg
+    constexpr float kRejectRadians = 2.6179938779914944F;    // 150 deg
     if (!IsFinite(controllerGunWorld) ||
         !IsFinite(predictedSupportWorld) ||
         !IsFinite(trackedLeftHandWorld) ||
@@ -190,8 +195,15 @@ ComputeBoundedOffHandWeaponSteering(
     {
         return std::nullopt;
     }
+    const float directionWeight = requestedAngle <= kFadeStartRadians
+        ? 1.0F
+        : requestedAngle >= kRejectRadians
+            ? 0.0F
+            : (kRejectRadians - requestedAngle) /
+                (kRejectRadians - kFadeStartRadians);
     const float appliedAngle =
-        std::min(requestedAngle * spanWeight, maximumSwingRadians);
+        std::min(requestedAngle * spanWeight * directionWeight,
+                 maximumSwingRadians);
     if (appliedAngle <= kDirectionEpsilon)
     {
         return OffHandWeaponSteeringResult{

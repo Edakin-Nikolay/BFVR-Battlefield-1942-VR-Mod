@@ -572,6 +572,14 @@ int RunPresenter(
         return 7;
     }
 
+    wchar_t mirrorEyeSetting[8] = {};
+    const bool desktopMirrorLeftEye =
+        GetEnvironmentVariableW(
+            L"BFVR_MIRROR_EYE",
+            mirrorEyeSetting,
+            static_cast<DWORD>(std::size(mirrorEyeSetting))) > 0 &&
+        (mirrorEyeSetting[0] == L'l' || mirrorEyeSetting[0] == L'L');
+
     bfvr::DesktopMirror desktopMirror;
     desktopMirror.Initialize(
         presentation.GetD3D11Device(),
@@ -579,6 +587,13 @@ int RunPresenter(
         block->producerProcessId,
         WriteLog,
         nullptr);
+    desktopMirror.SetMirrorEye(desktopMirrorLeftEye);
+    wchar_t mirrorEyeMessage[160] = {};
+    swprintf_s(
+        mirrorEyeMessage,
+        L"[PRESENTER] Desktop mirror eye: %ls (set BFVR_MIRROR_EYE=left or right before launch).\n",
+        desktopMirrorLeftEye ? L"left" : L"right");
+    WriteLog(nullptr, mirrorEyeMessage);
 
     bfvr::shared::PublishState(
         &block->presenterState,
@@ -1179,15 +1194,15 @@ int RunPresenter(
         {
             return;
         }
-        const bfvr::OpenXRPresentationView* const rightEye = frame.viewsValid
-            ? &frame.views[1]
+        const bfvr::OpenXRPresentationView* const mirrorEye = frame.viewsValid
+            ? &frame.views[desktopMirrorLeftEye ? 0 : 1]
             : nullptr;
         const std::int64_t mirrorStarted = performanceDiagnosticsEnabled
             ? ReadPerformanceCounter()
             : 0;
         desktopMirror.Render(
             consumer.GetLocalTextures(),
-            rightEye,
+            mirrorEye,
             acceptedUiPresentationMode,
             currentUiWorldAnchor(),
             quickMenuVisible ? &quickMenu : nullptr);

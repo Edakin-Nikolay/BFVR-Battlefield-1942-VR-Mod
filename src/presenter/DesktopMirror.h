@@ -28,6 +28,7 @@ public:
         OpenXRLogCallback logCallback,
         void* logContext);
     void PumpMessages();
+    void SetMirrorEye(bool leftEye) noexcept;
     void Render(
         const OpenXRPresentationTextures& textures,
         const OpenXRPresentationView* rightEyeView = nullptr,
@@ -46,8 +47,9 @@ private:
 
     bool EnsureWindow();
     bool EnsureSwapchain();
-    bool EnsureSourceViews(const OpenXRPresentationTextures& textures);
-    bool EnsureQuickMenuViews(const OpenXRQuickMenuMirrorState& quickMenu);
+    bool EnsureSourceViews(
+        const OpenXRPresentationTextures& textures,
+        ID3D11Texture2D* worldTexture);    bool EnsureQuickMenuViews(const OpenXRQuickMenuMirrorState& quickMenu);
     bool CreatePipeline();
     bool DrawQuickMenuQuad(
         const OpenXRPresentationPose& pose,
@@ -100,6 +102,7 @@ private:
     void* logContext_ = nullptr;
     bool initialized_ = false;
     bool permanentlyDisabled_ = false;
+    bool mirrorLeftEye_ = false;
     bool quickMenuMirrorFailureReported_ = false;
     bool firstQuickMenuMirroredLogged_ = false;
     bool scopeMirrorFailureReported_ = false;

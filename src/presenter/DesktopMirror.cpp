@@ -244,7 +244,7 @@ bool DesktopMirror::Initialize(
     context_->AddRef();
     producerProcessId_ = producerProcessId;
     initialized_ = true;
-    WriteLog(L"Desktop mirror is enabled; it will cover the BF1942 client at its native client resolution with a widescreen centre-cropped right-eye-plus-UI preview when the game window is available.");
+    WriteLog(L"Desktop mirror is enabled; it will cover the BF1942 client at its native client resolution with a widescreen centre-cropped mirror-eye-plus-UI preview when the game window is available.");
     return true;
 }
 
@@ -258,26 +258,33 @@ void DesktopMirror::PumpMessages()
     }
 }
 
+void DesktopMirror::SetMirrorEye(const bool leftEye) noexcept
+{
+    mirrorLeftEye_ = leftEye;
+}
+
 void DesktopMirror::Render(
     const OpenXRPresentationTextures& textures,
-    const OpenXRPresentationView* rightEyeView,
+    const OpenXRPresentationView* mirrorEyeView,
     OpenXRUiPresentationMode uiPresentationMode,
     const OpenXRPresentationPose* scopeRollInView,
     const OpenXRQuickMenuMirrorState* quickMenu)
 {
-    if (!initialized_ || permanentlyDisabled_ || textures.rightWorld == nullptr ||
+    ID3D11Texture2D* const worldTexture =
+        mirrorLeftEye_ ? textures.leftWorld : textures.rightWorld;
+    if (!initialized_ || permanentlyDisabled_ || worldTexture == nullptr ||
         textures.ref2Ui == nullptr)
     {
         return;
     }
     if (!EnsureWindow() || !EnsureSwapchain() || !CreatePipeline() ||
-        !EnsureSourceViews(textures))
+        !EnsureSourceViews(textures, worldTexture))
     {
         return;
     }
 
     D3D11_TEXTURE2D_DESC sourceDescription = {};
-    textures.rightWorld->GetDesc(&sourceDescription);
+    worldTexture->GetDesc(&sourceDescription);
     if (sourceDescription.Width == 0 || sourceDescription.Height == 0 ||
         bufferWidth_ == 0 || bufferHeight_ == 0)
     {
@@ -321,7 +328,7 @@ void DesktopMirror::Render(
     context_->PSSetConstantBuffers(0, 1, &cropConfiguration_);
     const bool eyeFillingScope =
         uiPresentationMode == OpenXRUiPresentationMode::EyeFillingScope &&
-        rightEyeView != nullptr;
+        mirrorEyeView != nullptr;
     // In ordinary modes the Ref2 layer is texture-aligned with the world.
     // A scope is different: the headset submits it as an eye-exclusive quad
     // centred on each eye's optical axis. Defer that UI draw so the desktop
@@ -336,11 +343,11 @@ void DesktopMirror::Render(
     if (eyeFillingScope)
     {
         const bfvr::stereo::ScopeOverlayFov fov = {
-            rightEyeView->fov.angleLeft,
-            rightEyeView->fov.angleRight,
-            rightEyeView->fov.angleUp,
-            rightEyeView->fov.angleDown};
-        bfvr::stereo::Pose scopeEye = ToStereoPose(rightEyeView->pose);
+            mirrorEyeView->fov.angleLeft,
+            mirrorEyeView->fov.angleRight,
+            mirrorEyeView->fov.angleUp,
+            mirrorEyeView->fov.angleDown};
+        bfvr::stereo::Pose scopeEye = ToStereoPose(mirrorEyeView->pose);
         if (scopeRollInView != nullptr)
         {
             scopeEye.orientation = Multiply(
@@ -363,23 +370,23 @@ void DesktopMirror::Render(
                 scopeQuad->heightMeters,
                 uiView_,
                 true,
-                *rightEyeView,
+                *mirrorEyeView,
                 crop.sourceScale,
                 crop.sourceOffset);
         context_->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFFU);
         if (scopeDrawn && !firstScopeMirroredLogged_)
         {
             firstScopeMirroredLogged_ = true;
-            WriteLog(L"Desktop mirror composited its first scope Ref2 layer through the physical right-eye pose/FOV and the same weapon-minus-head roll as the eye-exclusive headset quad.");
+            WriteLog(L"Desktop mirror composited its first scope Ref2 layer through the physical mirror-eye pose/FOV and the same weapon-minus-head roll as the eye-exclusive headset quad.");
         }
         else if (!scopeDrawn && !scopeMirrorFailureReported_)
         {
             scopeMirrorFailureReported_ = true;
-            WriteLog(L"Desktop mirror could not project the right-eye scope Ref2 layer; the right-eye world preview and headset scope remain active.");
+            WriteLog(L"Desktop mirror could not project the mirror-eye scope Ref2 layer; the mirror-eye world preview and headset scope remain active.");
         }
     }
 
-    if (rightEyeView != nullptr && quickMenu != nullptr &&
+    if (mirrorEyeView != nullptr && quickMenu != nullptr &&
         quickMenu->visible && quickMenu->menuTexture != nullptr &&
         EnsureQuickMenuViews(*quickMenu))
     {
@@ -396,7 +403,7 @@ void DesktopMirror::Render(
             quickMenu->panelHeightMeters,
             quickMenuView_,
             IsSrgbFormat(menuDescription.Format),
-            *rightEyeView,
+            *mirrorEyeView,
             crop.sourceScale,
             crop.sourceOffset);
         if (quickMenuUtilityView_ != nullptr &&
@@ -410,7 +417,7 @@ void DesktopMirror::Render(
                 quickMenu->utilityHeightMeters,
                 quickMenuUtilityView_,
                 IsSrgbFormat(utilityDescription.Format),
-                *rightEyeView,
+                *mirrorEyeView,
                 crop.sourceScale,
                 crop.sourceOffset);
         }
@@ -425,7 +432,7 @@ void DesktopMirror::Render(
                 quickMenu->commandHeightMeters,
                 quickMenuCommandView_,
                 IsSrgbFormat(commandDescription.Format),
-                *rightEyeView,
+                *mirrorEyeView,
                 crop.sourceScale,
                 crop.sourceOffset);
         }
@@ -440,7 +447,7 @@ void DesktopMirror::Render(
                 quickMenu->versionHeightMeters,
                 quickMenuVersionView_,
                 IsSrgbFormat(versionDescription.Format),
-                *rightEyeView,
+                *mirrorEyeView,
                 crop.sourceScale,
                 crop.sourceOffset);
         }
@@ -456,7 +463,7 @@ void DesktopMirror::Render(
                 quickMenu->cursorHeightMeters,
                 quickMenuCursorView_,
                 IsSrgbFormat(cursorDescription.Format),
-                *rightEyeView,
+                *mirrorEyeView,
                 crop.sourceScale,
                 crop.sourceOffset);
         }
@@ -728,16 +735,18 @@ bool DesktopMirror::EnsureSwapchain()
     return true;
 }
 
-bool DesktopMirror::EnsureSourceViews(const OpenXRPresentationTextures& textures)
+bool DesktopMirror::EnsureSourceViews(
+    const OpenXRPresentationTextures& textures,
+    ID3D11Texture2D* const worldTexture)
 {
-    if (worldTexture_ == textures.rightWorld && uiTexture_ == textures.ref2Ui &&
+    if (worldTexture_ == worldTexture && uiTexture_ == textures.ref2Ui &&
         worldView_ != nullptr && uiView_ != nullptr)
     {
         return true;
     }
     ReleaseSourceViews();
     HRESULT result = device_->CreateShaderResourceView(
-        textures.rightWorld, nullptr, &worldView_);
+        worldTexture, nullptr, &worldView_);
     if (SUCCEEDED(result))
     {
         result = device_->CreateShaderResourceView(textures.ref2Ui, nullptr, &uiView_);
@@ -748,7 +757,7 @@ bool DesktopMirror::EnsureSourceViews(const OpenXRPresentationTextures& textures
         Disable(L"Desktop mirror could not create its source views; the headset presentation remains active.");
         return false;
     }
-    worldTexture_ = textures.rightWorld;
+    worldTexture_ = worldTexture;
     uiTexture_ = textures.ref2Ui;
     return true;
 }
@@ -838,7 +847,7 @@ bool DesktopMirror::DrawQuickMenuQuad(
     float heightMeters,
     ID3D11ShaderResourceView* textureView,
     bool sourceIsSrgb,
-    const OpenXRPresentationView& rightEyeView,
+    const OpenXRPresentationView& mirrorEyeView,
     const float sourceScale[2],
     const float sourceOffset[2])
 {
@@ -848,11 +857,11 @@ bool DesktopMirror::DrawQuickMenuQuad(
         return false;
     }
     stereo::QuickMenuMirrorView eye = {};
-    eye.pose = ToStereoPose(rightEyeView.pose);
-    eye.angleLeft = rightEyeView.fov.angleLeft;
-    eye.angleRight = rightEyeView.fov.angleRight;
-    eye.angleUp = rightEyeView.fov.angleUp;
-    eye.angleDown = rightEyeView.fov.angleDown;
+    eye.pose = ToStereoPose(mirrorEyeView.pose);
+    eye.angleLeft = mirrorEyeView.fov.angleLeft;
+    eye.angleRight = mirrorEyeView.fov.angleRight;
+    eye.angleUp = mirrorEyeView.fov.angleUp;
+    eye.angleDown = mirrorEyeView.fov.angleDown;
     const stereo::QuickMenuMirrorCrop crop = {
         sourceScale[0],
         sourceScale[1],

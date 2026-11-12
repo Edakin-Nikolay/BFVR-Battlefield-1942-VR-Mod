@@ -1054,11 +1054,52 @@ bool SteeringIgnoresRadialMismatchAndHandlesOppositeDirection() noexcept
                "collapsed tracked support span was accepted") &&
         Expect(
             oppositeResult.has_value() &&
-                std::fabs(oppositeResult->appliedSwingRadians - kPi) <
+                std::fabs(oppositeResult->appliedSwingRadians) <
                     0.0001F &&
-                std::fabs(oppositeResult->gunWorld.values[2][2] + 1.0F) <
+                std::fabs(oppositeResult->gunWorld.values[2][2] - 1.0F) <
                     0.0001F,
-            "opposite support direction did not use a deterministic full swing");
+            "opposite support direction was not rejected");
+}
+
+bool SteeringFadesNearOppositeDirection() noexcept
+{
+    constexpr float kPi = 3.14159265358979323846F;
+    const auto gun = Translation(2.0F, 1.0F, -3.0F);
+    const auto predicted = Translation(2.0F, 1.0F, -2.6F);
+    const float fadedAngle = 135.0F * kPi / 180.0F;
+    const auto faded = Translation(
+        2.0F + 0.4F * std::sin(fadedAngle),
+        1.0F,
+        -3.0F + 0.4F * std::cos(fadedAngle));
+    const auto fadedResult =
+        bfvr::stereo::ComputeBoundedOffHandWeaponSteering(
+            gun,
+            predicted,
+            faded,
+            bfvr::stereo::kUnrestrictedOffHandWeaponSwingRadians,
+            1.0F);
+    const float rejectedAngle = 160.0F * kPi / 180.0F;
+    const auto rejected = Translation(
+        2.0F + 0.4F * std::sin(rejectedAngle),
+        1.0F,
+        -3.0F + 0.4F * std::cos(rejectedAngle));
+    const auto rejectedResult =
+        bfvr::stereo::ComputeBoundedOffHandWeaponSteering(
+            gun,
+            predicted,
+            rejected,
+            bfvr::stereo::kUnrestrictedOffHandWeaponSwingRadians,
+            1.0F);
+    return Expect(
+               fadedResult.has_value() &&
+                   fadedResult->appliedSwingRadians > 0.0F &&
+                   fadedResult->appliedSwingRadians <
+                       fadedResult->requestedSwingRadians,
+               "near-opposite support direction did not fade") &&
+        Expect(
+            rejectedResult.has_value() &&
+                std::fabs(rejectedResult->appliedSwingRadians) < 0.0001F,
+            "far-opposite support direction was not rejected");
 }
 
 bool SteeringAttenuatesCloseHandSpan() noexcept
@@ -1324,6 +1365,7 @@ int main()
         SoldierSteeringFrameUsesTrackedGripAndRejectsPistol() &&
         SteeringUsesFixedPivotAndFullDirectionalSwing() &&
         SteeringIgnoresRadialMismatchAndHandlesOppositeDirection() &&
+        SteeringFadesNearOppositeDirection() &&
         SteeringAttenuatesCloseHandSpan() &&
         AcquireByProximityAndRetainUntilExplicitRelease() &&
         BindingUsesModeSpecificAcquireRadii() &&

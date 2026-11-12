@@ -25,6 +25,15 @@ the current version's section once it is released.
   right grip than a full foregrip span, so a close two-hand hold no longer turns
   tiny positional errors into large weapon swings. A normal foregrip span keeps
   the full directional response.
+- Two-hand support steering also fades beyond 120 degrees and rejects a support
+  direction beyond 150 degrees, preventing the unstable near-opposite rotation
+  that could suddenly pitch the weapon up or down.
+
+### Added
+
+- The desktop mirror can show either eye. Set `BFVR_MIRROR_EYE=left` (or
+  `right`) before launch; the default remains the right eye. The headset
+  presentation is unchanged.
 
 ## [1.0.3] - 2026-10-24
 

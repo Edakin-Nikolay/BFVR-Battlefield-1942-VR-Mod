@@ -80,3 +80,20 @@ manifest и uninstaller работают. Для этого — контур 2.
 - цифру из теста, которую сверяем с ощущениями.
 
 Без этого прогон не считается подтверждением, а только впечатлением.
+
+## Экранные снимки и выбор глаза (левша)
+
+Desktop mirror по умолчанию показывает правый глаз. Для левшей и диагностики:
+
+```powershell
+$env:BFVR_MIRROR_EYE='left'   # или 'right'
+```
+
+Переменная читается presenter'ом при старте; в `BFVRPresenter-game.log`
+пишется строка `Desktop mirror eye: left/right`. На рендер в шлеме не влияет.
+
+## Экспериментальный spread (только SP/LAN)
+
+`BFVR_EXPERIMENTAL_SPREAD_SCALE_PERCENT=0..100` (по умолчанию 100 = выключен).
+Протокол замера: `test/checklists/2026-11-13-spread-sp.md`, исследование:
+`repo/docs/ru/spread-research-ru.md`.

@@ -44,6 +44,7 @@
 | 8 | Подсветка мушки/целика (референс Arizona Sunshine 2) | решение: кроссчер / маркеры BFVR / ассет-пак | P8 |
 | 9 | Управление для левшей | input-layer: доминирующая рука, кнопки, haptics | P6 |
 | 10 | Русская локализация мода | lookup-строки + PNG-атласы + layout | P7 |
+| 11 | Иммерсивный VR-UI (здоровье на предплечье, патроны на магазине) | исследование данных + якоря рендера + MVP | P11 |
 
 ### Вне scope (зафиксировать, чтобы не тратить силы)
 
@@ -130,6 +131,13 @@
   только для useScope-оружия (`src/stereo/ScopeViewMath.h:189-212`,
   `src/client/ScopeViewOverlay.cpp:345` — «ordinary zoom-only secondary fire
   remains unchanged»).
+- **P2.11 (13.11.2026):** spread задаётся в `Objects/HandWeapons/<Weapon>/Objects.con`
+  (`setFireDev/setDevMod/setMinDev/setTurnDev/setSpeedDev/setMiscDev`), сервер
+  считает попадания сам. Runtime-значение читается в `WeaponFire_Core` как
+  `float` по `weapon + 0x1A8`. Подробный отчёт и варианты:
+  `docs/ru/spread-research-ru.md`. В `WeaponAimOverlay.cpp` добавлен
+  экспериментальный env-режим `BFVR_EXPERIMENTAL_SPREAD_SCALE_PERCENT`
+  (0..100, по умолчанию 100 = выкл), restore после вызова.
 
 ### 3.3 Снайперский прицел
 
@@ -354,6 +362,10 @@ P10 (кабина техники) выделен после прогона 12.11
 | P2.9 | Адаптивный фильтр микро-тремора hand weapon (как scope smoothing, но для обычного оружия) | P2.7 | `src/stereo/ScopeViewMath.*` (обобщить) или новый helper; настройка strength | тремор <1.5° гасится, осознанное движение проходит без лага; тесты | main |
 | P2.10 | Virtual stock: ориентация оружия из линии двух рук (веса по дистанции, min/max span) | P2.3, P2.9 | `OffHandWeaponSteeringMath.*`, `BFSoldierNativeArmIk.cpp` | нет дёрганья при сближении/разведении рук; вторая рука реально стабилизирует; тесты | general |
 | P2.11 | Research: где хранится spread (deviation) и можно ли безопасно уменьшить | P1.7 | `.rfa`/ObjectTemplate, Ghidra, `RfaInspect` | отчёт: вариант (asset tweak / runtime patch / не трогать), риски MP | general |
+| P2.12 | SP-замер экспериментального spread-scale (env, 100% vs 0%, 20 м) | P2.11 | `BFVR_EXPERIMENTAL_SPREAD_SCALE_PERCENT`, SP-карта | группа попаданий при 0% ≤ метки; restore подтверждён логом | USER-VERIFY |
+| P2.13 | MP-проверка spread-scale на 2 клиентах (dedicated) | P2.12 | 2 клиента, hit-маркеры | решение: можно ли включать в публичную версию | USER-VERIFY + main |
+| P2.14 | Sidearm off-hand: приоритет авторской «чашки» пистолета + fallback на tracked | P2.10 | `OffHandSupportPolicy.*`, `BFSoldierNativeArmIk.cpp`, tests | левая рука на рукоятке пистолета, не за её пределами; тесты политики | main + USER-VERIFY |
+| P2.15 | Диагностика лага рук за головой при stick-turn (deep): метки времени head/controller/generation | P2.9 | `BFSoldierNativeArmIk.cpp`, `D3D8RenderViewPoseHook.cpp`, `normal/deep` лог | число кадров/мс рассогласования; решение о правке фильтра/сэмплинга | main |
 
 ### P10. Техника: обзор из кабины (п.5, вторая итерация)
 
@@ -364,6 +376,17 @@ P10 (кабина техники) выделен после прогона 12.11
 | P10.3 | Тесты маски + шлем | P10.2 | pure math + `test/checklists` | вырез совпадает со щелью на обоих глазах; нет мерцания | main + USER-VERIFY |
 | P10.4 | Fallback: ограничение поворота головы в coupled-режиме до окна щели | P0.5 | `MountedCameraMath.*` + tests + настройка | альтернатива P10.2, если маска окажется хуже; pure math | llama_pc + main |
 | P10.5 | Docs/CHANGELOG | P10.3/P10.4 | — | обновлено | text_routine |
+
+### P11. Иммерсивный VR-интерфейс (новое, исследование)
+
+| ID | Задача | Зависит | Файлы/действия | Критерий приёмки | Агент |
+|---|---|---|---|---|---|
+| P11.1 | Research: источники здоровья/патронов (native HUD, Player/Item, Ref2) | — | `BF1942HudToggle.cpp`, `D3D8StereoPairProbe.cpp`, `PlayerInputProbe.cpp`, Ghidra | отчёт: какие значения читаются без записи в игру | general |
+| P11.2 | Research: якоря рендера (OpenXR quad к кисти/предплечью, D3D8 overlay, кости) | — | `OpenXRPresentation.cpp`, `DesktopMirror.cpp`, `BFSoldierNativeArmIk.cpp` | список вариантов с ценой/риском | general |
+| P11.3 | MVP: здоровье на предплечье свободной руки | P11.1, P11.2 | новый overlay + протокол (версия +1) | читается в шлеме, не перекрывает оружие | main + USER-VERIFY |
+| P11.4 | MVP: патроны на магазине/оружии | P11.1, P11.2 | тот же канал данных | счётчик совпадает с HUD | main + USER-VERIFY |
+| P11.5 | UX-дизайн: когда показывать, размеры, левша/правша, производительность | P11.3 | `docs/ru/immersive-ui-design.md` | согласованный дизайн до реализации | main + user |
+| P11.6 | Тесты/перф + шлем | P11.3–P11.5 | pure math + `BFVR_PERFORMANCE_SUMMARY` | нет просадки, читаемо обоими глазами | main + USER-VERIFY |
 
 ### P3. Ручная перезарядка (п.4)
 
@@ -384,6 +407,7 @@ P10 (кабина техники) выделен после прогона 12.11
 | P4.2 | Если не виден: проекционный масштаб для zoom-only (переиспользовать `ScopeViewMath`) | P4.1 | `D3D8RenderViewPoseHook.cpp`, `ScopeViewMath.*` | относительный zoom сохраняется без head-locked оверлея | general |
 | P4.3 | Тесты + шлем | P4.2 | pure tests + чек-лист | масштаб монотонен, возврат к 1.0 без ступеньки | main + USER-VERIFY |
 | P4.4 | Docs/CHANGELOG | P4.3 | — | обновлено | text_routine |
+| P4.5 | Калибровка линии мушки/целика относительно fire-ray (per-weapon) | P1.7 | замер в шлеме + pure math + настройка смещения | мушка/целик и fire-ray сходятся в точке прицеливания; тесты | main + USER-VERIFY |
 
 ### P5. World-space оптика (п.3) — крупнейшая работа
 
@@ -435,6 +459,7 @@ P10 (кабина техники) выделен после прогона 12.11
 | P8.3 | Прототип pure math + tests | P8.2 | новый helper `src/stereo/` | позиции стабильны, fail-closed без калибровки | main |
 | P8.4 | Шлем | P8.3 | чек-лист | точки совпадают с мушкой, не «плавают» | USER-VERIFY |
 | P8.5 | Docs/CHANGELOG | P8.4 | — | обновлено | text_routine |
+| P8.6 | Замена заднего целика там, где его нет (гранатомёт): world-crosshair или маркер BFVR | P1.7, P8.1 | `WorldCrosshairMath.*`, `CrosshairOverlay.cpp` | по гранатомёту можно целиться без нативного целика | main + USER-VERIFY |
 
 ### P9. Сквозные задачи (постоянно)
 

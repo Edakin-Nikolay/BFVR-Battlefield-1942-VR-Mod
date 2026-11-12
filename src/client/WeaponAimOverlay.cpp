@@ -23,6 +23,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <intrin.h>
 
@@ -33,7 +34,13 @@ constexpr wchar_t kEnableWeaponMotionEnvironment[] =
     L"BFVR_ENABLE_WEAPON_MOTION";
 constexpr wchar_t kEnableNativeArmIkEnvironment[] =
     L"BFVR_ENABLE_NATIVE_1P_ARMS_IK";
+constexpr wchar_t kExperimentalSpreadScaleEnvironment[] =
+    L"BFVR_EXPERIMENTAL_SPREAD_SCALE_PERCENT";
 constexpr std::ptrdiff_t kWeaponFireCoreRva = 0x0013CDB0;
+// WeaponFire_Core reads the current deviation as a float at this object offset
+// before choosing a uniform cone. BFVR restores the original value immediately
+// after the forwarded call; the experimental scale is off by default.
+constexpr std::size_t kWeaponDeviationOffset = 0x1A8;
 // WeaponFire_Ordinary dispatches the same fire core through five mutually
 // exclusive native branches: the default barrel, barrel zero, an indexed
 // multi-barrel loop, every configured barrel, and the rotating-barrel case.
@@ -170,6 +177,28 @@ public:
                 nativeArmIkEnabled,
                 static_cast<DWORD>(std::size(nativeArmIkEnabled))) == 1 &&
             nativeArmIkEnabled[0] == L'1';
+        experimentalSpreadScale = 1.0F;
+        wchar_t spreadScaleText[8] = {};
+        if (GetEnvironmentVariableW(
+                kExperimentalSpreadScaleEnvironment,
+                spreadScaleText,
+                static_cast<DWORD>(std::size(spreadScaleText))) > 0)
+        {
+            wchar_t* end = nullptr;
+            const unsigned long percent =
+                std::wcstoul(spreadScaleText, &end, 10);
+            if (end != spreadScaleText && percent <= 100UL)
+            {
+                experimentalSpreadScale =
+                    static_cast<float>(percent) / 100.0F;
+                if (experimentalSpreadScale < 1.0F)
+                {
+                    WriteLog(
+                        L"Experimental spread scale %lu%% enabled for accepted local infantry shots; the native deviation is restored immediately after each call. SP/LAN measurement only.",
+                        percent);
+                }
+            }
+        }
 
         gameImage = static_cast<std::byte*>(image);
         fireTarget = gameImage == nullptr
@@ -689,7 +718,43 @@ private:
             }
         }
         InterlockedIncrement(&adjustedCalls);
+        float* const deviation = experimentalSpreadScale < 1.0F &&
+                exactInfantryControl && weapon != nullptr
+            ? reinterpret_cast<float*>(
+                  static_cast<std::byte*>(weapon) +
+                  kWeaponDeviationOffset)
+            : nullptr;
+        float savedDeviation = 0.0F;
+        bool deviationPatched = false;
+        if (deviation != nullptr)
+        {
+            __try
+            {
+                const float value = *deviation;
+                if (std::isfinite(value) && value >= 0.0F && value <= 50.0F)
+                {
+                    savedDeviation = value;
+                    *deviation = value * experimentalSpreadScale;
+                    deviationPatched = true;
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                deviationPatched = false;
+            }
+        }
         originalFire(weapon, actor, &*adjusted, barrelIndex);
+        if (deviationPatched)
+        {
+            __try
+            {
+                *deviation = savedDeviation;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+            }
+            InterlockedIncrement(&spreadPatchedCalls);
+        }
     }
 
     bool IsExpectedCaller(const void* callerReturn) const noexcept
@@ -776,7 +841,7 @@ private:
     void Report() const
     {
         WriteLog(
-            L"WeaponFire observer stopped: observed=%ld nativeAuthorityForwarded=%ld adjusted=%ld scopedDirectionOnly=%ld controllerPointerAim=%ld wrongCaller=%ld nonLocalOrDead=%ld unreadable=%ld missingVisualWeaponPose=%ld missingNativeArmPose=%ld cameraLifetimeMismatch=%ld anchorDistanceRejected=%ld mathRejected=%ld.",
+            L"WeaponFire observer stopped: observed=%ld nativeAuthorityForwarded=%ld adjusted=%ld scopedDirectionOnly=%ld controllerPointerAim=%ld wrongCaller=%ld nonLocalOrDead=%ld unreadable=%ld missingVisualWeaponPose=%ld missingNativeArmPose=%ld cameraLifetimeMismatch=%ld anchorDistanceRejected=%ld mathRejected=%ld spreadPatched=%ld.",
             observedCalls,
             nativeAuthorityForwardedCalls,
             adjustedCalls,
@@ -789,7 +854,8 @@ private:
             missingNativeArmPose,
             cameraLifetimeMismatch,
             anchorDistanceRejected,
-            mathRejections);
+            mathRejections,
+            spreadPatchedCalls);
         const LONG maximum = std::min(
             InterlockedCompareExchange(
                 const_cast<volatile LONG*>(&nextRecordSequence),
@@ -896,7 +962,9 @@ private:
     volatile LONG loggedLocalFallbacks = 0;
     volatile LONG loggedAdjustedSamples = 0;
     volatile LONG mathRejections = 0;
+    volatile LONG spreadPatchedCalls = 0;
     volatile LONG nextRecordSequence = 0;
+    float experimentalSpreadScale = 1.0F;
     bool ownsMinHook = false;
     bool hookCreated = false;
     bool hookEnabled = false;
