@@ -55,6 +55,21 @@ bfvr::stereo::Vec3 Direction(
     return {x / length, y / length, 1.0F / length};
 }
 
+bfvr::stereo::MountedCabinSlitRing SlitRing() noexcept
+{
+    bfvr::stereo::MountedCabinSlitRing ring = {};
+    ring.forwardWorld = {0.0F, 0.0F, 1.0F};
+    ring.rightWorld = {1.0F, 0.0F, 0.0F};
+    ring.upWorld = {0.0F, 1.0F, 0.0F};
+    ring.slitHalfWidthRadians = Radians(5.0F);
+    ring.slitPeriodRadians = Radians(30.0F);
+    ring.halfHeightRadians = Radians(8.0F);
+    ring.forwardWindowHalfWidthRadians = Radians(15.0F);
+    ring.forwardWindowHalfHeightRadians = Radians(12.0F);
+    ring.featherRadians = Radians(3.0F);
+    return ring;
+}
+
 bool CenterAndInsideAreClear() noexcept
 {
     constexpr std::string_view test = "center/inside";
@@ -174,6 +189,103 @@ bool ClampKeepsInsideAndBoundsOutside() noexcept
             "behind direction was not clamped into the window");
 }
 
+bool SlitRingKeepsForwardAndSideOpenings() noexcept
+{
+    constexpr std::string_view test = "slit ring";
+    const auto ring = SlitRing();
+    const auto forward =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(0.0F, 0.0F),
+            ring);
+    const auto forwardEdge =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(10.0F, 10.0F),
+            ring);
+    const auto side =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(30.0F, 0.0F),
+            ring);
+    const auto wrapped =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(179.0F, 0.0F),
+            ring);
+    return Expect(
+               forward.has_value() && forward->inside &&
+                   std::fabs(forward->alpha) < 0.0001F,
+               test,
+               "forward window was not clear") &&
+        Expect(
+            forwardEdge.has_value() && forwardEdge->inside,
+            test,
+            "forward window edge was not clear") &&
+        Expect(
+            side.has_value() && side->inside,
+            test,
+            "periodic side slit was not clear") &&
+        Expect(
+            wrapped.has_value() && wrapped->inside,
+            test,
+            "wrapped back slit was not clear");
+}
+
+bool SlitRingMasksPillarsAndOutsideHeight() noexcept
+{
+    constexpr std::string_view test = "slit ring armor";
+    const auto ring = SlitRing();
+    const auto pillar =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(45.0F, 0.0F),
+            ring);
+    const auto nearSlit =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(17.0F, 0.0F),
+            ring);
+    const auto highSide =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(30.0F, 10.0F),
+            ring);
+    const auto higherForward =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(0.0F, 16.0F),
+            ring);
+    auto invalid = ring;
+    invalid.slitPeriodRadians = Radians(8.0F);
+    const auto rejected =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(30.0F, 0.0F),
+            invalid);
+    auto badBasis = ring;
+    badBasis.rightWorld = {0.0F, 0.0F, 1.0F};
+    const auto rejectedBasis =
+        bfvr::stereo::EvaluateMountedCabinSlitRing(
+            Direction(30.0F, 0.0F),
+            badBasis);
+    return Expect(
+               pillar.has_value() && !pillar->inside &&
+                   std::fabs(pillar->alpha - 1.0F) < 0.0001F,
+               test,
+               "pillar between slits was not fully masked") &&
+        Expect(
+            nearSlit.has_value() && !nearSlit->inside &&
+                nearSlit->alpha > 0.0F && nearSlit->alpha < 1.0F,
+            test,
+            "slit feather band did not produce a partial mask") &&
+        Expect(
+            highSide.has_value() && !highSide->inside &&
+                highSide->alpha > 0.0F,
+            test,
+            "side slit height was not enforced") &&
+        Expect(
+            higherForward.has_value() && !higherForward->inside &&
+                std::fabs(higherForward->alpha - 1.0F) < 0.0001F,
+            test,
+            "forward window height was not enforced") &&
+        Expect(
+            !rejected.has_value() && !rejectedBasis.has_value(),
+            test,
+            "invalid slit ring did not fail closed");
+}
+
 } // namespace
 
 int wmain()
@@ -182,7 +294,9 @@ int wmain()
         CenterAndInsideAreClear() &&
         FeatherAndOutsideAreMasked() &&
         BehindIsMaskedAndInvalidWindowFailsClosed() &&
-        ClampKeepsInsideAndBoundsOutside();
+        ClampKeepsInsideAndBoundsOutside() &&
+        SlitRingKeepsForwardAndSideOpenings() &&
+        SlitRingMasksPillarsAndOutsideHeight();
     if (!passed)
     {
         std::printf("Mounted cabin mask math tests failed.\n");

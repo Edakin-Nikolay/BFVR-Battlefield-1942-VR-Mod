@@ -371,7 +371,9 @@ P10 (кабина техники) выделен после прогона 12.11
 
 Статус 13.11.2026: дизайн (`docs/ru/mounted-cabin-mask-design.md`) и pure math
 (`src/stereo/MountedCabinMaskMath.*` + tests) готовы; 38/38 в отдельной ветке
-`feature/v1.0.4-next`. Runtime P10.1–P10.3 не начат.
+`feature/v1.0.4-next`. Добавлен вариант B — world-locked кольцо узких щелей
+(`EvaluateMountedCabinSlitRing`), чтобы оглядываться без поворота башни.
+Runtime P10.1–P10.3 не начат.
 
 | ID | Задача | Зависит | Файлы/действия | Критерий приёмки | Агент |
 |---|---|---|---|---|---|

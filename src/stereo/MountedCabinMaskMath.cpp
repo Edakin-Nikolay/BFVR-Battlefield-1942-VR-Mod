@@ -143,6 +143,126 @@ std::optional<MountedCabinMaskSample> EvaluateMountedCabinMask(
     return sample;
 }
 
+namespace
+{
+
+bool IsValidSlitRing(const MountedCabinSlitRing& ring) noexcept
+{
+    if (!IsFinite(ring.forwardWorld) ||
+        !IsFinite(ring.rightWorld) ||
+        !IsFinite(ring.upWorld) ||
+        !std::isfinite(ring.slitHalfWidthRadians) ||
+        !std::isfinite(ring.slitPeriodRadians) ||
+        !std::isfinite(ring.halfHeightRadians) ||
+        !std::isfinite(ring.forwardWindowHalfWidthRadians) ||
+        !std::isfinite(ring.forwardWindowHalfHeightRadians) ||
+        !std::isfinite(ring.featherRadians))
+    {
+        return false;
+    }
+    if (ring.slitHalfWidthRadians <= 0.0F ||
+        ring.slitPeriodRadians <= 2.0F * ring.slitHalfWidthRadians ||
+        ring.halfHeightRadians <= 0.0F ||
+        ring.halfHeightRadians >= kPi * 0.5F ||
+        ring.forwardWindowHalfWidthRadians <= 0.0F ||
+        ring.forwardWindowHalfWidthRadians >= kPi * 0.5F ||
+        ring.forwardWindowHalfHeightRadians <= 0.0F ||
+        ring.forwardWindowHalfHeightRadians >= kPi * 0.5F ||
+        ring.featherRadians < 0.0F ||
+        ring.featherRadians > kPi * 0.5F)
+    {
+        return false;
+    }
+    const auto forward = Normalize(ring.forwardWorld);
+    const auto right = Normalize(ring.rightWorld);
+    const auto up = Normalize(ring.upWorld);
+    if (!forward.has_value() || !right.has_value() || !up.has_value())
+    {
+        return false;
+    }
+    return std::fabs(Dot(*forward, *right)) <= kMaximumOrthogonalityError &&
+        std::fabs(Dot(*forward, *up)) <= kMaximumOrthogonalityError &&
+        std::fabs(Dot(*right, *up)) <= kMaximumOrthogonalityError;
+}
+
+} // namespace
+
+std::optional<MountedCabinSlitRingSample> EvaluateMountedCabinSlitRing(
+    const Vec3& viewForwardWorld,
+    const MountedCabinSlitRing& ring) noexcept
+{
+    if (!IsFinite(viewForwardWorld) || !IsValidSlitRing(ring))
+    {
+        return std::nullopt;
+    }
+    const auto viewForward = Normalize(viewForwardWorld);
+    const auto forward = Normalize(ring.forwardWorld);
+    const auto right = Normalize(ring.rightWorld);
+    const auto up = Normalize(ring.upWorld);
+    if (!viewForward.has_value() || !forward.has_value() ||
+        !right.has_value() || !up.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const float localRight = Dot(*viewForward, *right);
+    const float localUp = Dot(*viewForward, *up);
+    const float localForward = Dot(*viewForward, *forward);
+    MountedCabinSlitRingSample sample = {};
+    sample.valid = true;
+    if (localForward <= kMinimumForwardComponent)
+    {
+        sample.yawRadians = localRight < 0.0F ? -kPi : kPi;
+        sample.pitchRadians = localUp < 0.0F ? -kPi : kPi;
+        sample.inside = false;
+        sample.alpha = 1.0F;
+        return sample;
+    }
+
+    const float horizontalLength = std::hypot(localForward, localRight);
+    sample.yawRadians = std::atan2(localRight, localForward);
+    sample.pitchRadians = std::atan2(localUp, horizontalLength);
+    const bool forwardWindow =
+        std::fabs(sample.yawRadians) <=
+        ring.forwardWindowHalfWidthRadians;
+    const float periodOffset = std::remainder(
+        sample.yawRadians,
+        ring.slitPeriodRadians);
+    const bool periodicSlit =
+        std::fabs(periodOffset) <= ring.slitHalfWidthRadians;
+    const bool horizontalInside = forwardWindow || periodicSlit;
+    const float verticalLimit = forwardWindow
+        ? ring.forwardWindowHalfHeightRadians
+        : ring.halfHeightRadians;
+    const float verticalExcess =
+        std::fabs(sample.pitchRadians) - verticalLimit;
+    sample.inside = horizontalInside && verticalExcess <= 0.0F;
+    if (sample.inside)
+    {
+        sample.alpha = 0.0F;
+        return sample;
+    }
+
+    float horizontalExcess = 0.0F;
+    if (!horizontalInside)
+    {
+        const float forwardExcess =
+            std::fabs(sample.yawRadians) -
+            ring.forwardWindowHalfWidthRadians;
+        const float slitExcess =
+            std::fabs(periodOffset) - ring.slitHalfWidthRadians;
+        horizontalExcess = std::min(forwardExcess, slitExcess);
+    }
+    const float horizontalAlpha = SmoothFalloff(
+        std::max(horizontalExcess, 0.0F),
+        ring.featherRadians);
+    const float verticalAlpha = SmoothFalloff(
+        std::max(verticalExcess, 0.0F),
+        ring.featherRadians);
+    sample.alpha = std::max(horizontalAlpha, verticalAlpha);
+    return sample;
+}
+
 std::optional<Vec3> ClampForwardToMountedCabinWindow(
     const Vec3& viewForwardWorld,
     const MountedCabinWindow& window) noexcept
