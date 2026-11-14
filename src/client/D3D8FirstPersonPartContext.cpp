@@ -1,4 +1,6 @@
 #include "client/D3D8FirstPersonPartContext.h"
+#include "client/BFSoldierVrMotionFilter.h"
+#include "client/D3D8RuntimeDiagnostics.h"
 
 #include <MinHook.h>
 
@@ -6,6 +8,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <string_view>
 
@@ -15,6 +18,9 @@ namespace
 constexpr std::ptrdiff_t kAnimatedMeshDrawRva = 0x001AEEC0;
 constexpr std::size_t kAnimatedMeshTemplateOffset = 0x24;
 constexpr std::size_t kAnimatedMeshTemplateNameOffset = 0x34;
+constexpr std::size_t kAnimatedMeshSkeletonOffset = 0x18C;
+constexpr std::size_t kSoldierAnimationSkeletonOffset = 0x298;
+constexpr std::size_t kSoldierCollisionSkeletonOffset = 0x29C;
 constexpr BYTE kAnimatedMeshDrawPrefix[] = {
     0xA1, 0x44, 0x9A, 0x95, 0x00, 0x83, 0xEC, 0x18,
     0x85, 0xC0, 0x55, 0x8B, 0xE9, 0x7C, 0x36, 0x8B,
@@ -107,6 +113,9 @@ public:
             return started_;
         }
         appendLog_ = appendLog;
+        deepDiagnostics_ =
+            bfvr::IsDeepD3D8RuntimeDiagnostics(
+                bfvr::ReadD3D8RuntimeDiagnosticLevel());
         target_ = static_cast<std::byte*>(gameImage) +
             kAnimatedMeshDrawRva;
         if (!HasExpectedPrefix(target_))
@@ -203,6 +212,7 @@ private:
         g_currentAnimatedMesh.animatedMesh = animatedMesh;
         __try
         {
+            context->ObserveDrawSkeleton(animatedMesh);
             context->original_(animatedMesh, renderContext, lodDistance);
         }
         __finally
@@ -323,6 +333,70 @@ private:
         return partKind;
     }
 
+    // Deep-only, bounded comparison of the skeleton an animated mesh draws
+    // from against the local soldier's live skeletons. This does not alter
+    // classification or rendering; it answers whether visible parts use the
+    // same skeleton instance the arm IK injects.
+    void ObserveDrawSkeleton(void* animatedMesh) noexcept
+    {
+        if (!deepDiagnostics_ || drawReports_ >= 1200 || animatedMesh == nullptr)
+        {
+            return;
+        }
+        const DWORD now = GetTickCount();
+        if (drawReports_ != 0 && now - lastDrawReportAt_ < 500)
+        {
+            return;
+        }
+        void* meshSkeleton = nullptr;
+        __try
+        {
+            meshSkeleton = *reinterpret_cast<void* const*>(
+                static_cast<const std::byte*>(animatedMesh) +
+                kAnimatedMeshSkeletonOffset);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return;
+        }
+        void* const soldier = bfvr::ReadCurrentBFSoldierVrCameraSoldier();
+        void* animationSkeleton = nullptr;
+        void* collisionSkeleton = nullptr;
+        if (soldier != nullptr)
+        {
+            __try
+            {
+                animationSkeleton = *reinterpret_cast<void* const*>(
+                    static_cast<const std::byte*>(soldier) +
+                    kSoldierAnimationSkeletonOffset);
+                collisionSkeleton = *reinterpret_cast<void* const*>(
+                    static_cast<const std::byte*>(soldier) +
+                    kSoldierCollisionSkeletonOffset);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                animationSkeleton = nullptr;
+                collisionSkeleton = nullptr;
+            }
+        }
+        const auto kind = ReadCurrentPartKind();
+        wchar_t message[256] = {};
+        swprintf_s(
+            message,
+            L"FPART_DRAW kind=%d mesh=%p meshSkeleton=%p animationSkeleton=%p "
+            L"animationMatch=%d collisionMatch=%d soldier=%p.",
+            static_cast<int>(kind),
+            animatedMesh,
+            meshSkeleton,
+            animationSkeleton,
+            meshSkeleton != nullptr && meshSkeleton == animationSkeleton ? 1 : 0,
+            meshSkeleton != nullptr && meshSkeleton == collisionSkeleton ? 1 : 0,
+            soldier);
+        WriteLog(message);
+        lastDrawReportAt_ = now;
+        ++drawReports_;
+    }
+
     void WriteLog(const wchar_t* message) const noexcept
     {
         if (appendLog_ != nullptr && message != nullptr)
@@ -335,6 +409,9 @@ private:
     void* target_ = nullptr;
     AnimatedMeshDrawFn original_ = nullptr;
     void (*appendLog_)(const wchar_t* message) = nullptr;
+    DWORD lastDrawReportAt_ = 0;
+    LONG drawReports_ = 0;
+    bool deepDiagnostics_ = false;
     volatile LONG activeCallbacks_ = 0;
     bool hookCreated_ = false;
     bool hookEnabled_ = false;
