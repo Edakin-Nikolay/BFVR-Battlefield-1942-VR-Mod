@@ -21,6 +21,13 @@ constexpr std::size_t kAnimatedMeshTemplateNameOffset = 0x34;
 constexpr std::size_t kAnimatedMeshSkeletonOffset = 0x18C;
 constexpr std::size_t kSoldierAnimationSkeletonOffset = 0x298;
 constexpr std::size_t kSoldierCollisionSkeletonOffset = 0x29C;
+constexpr std::size_t kSoldierTemplateOffset = 0x4C;
+constexpr std::size_t kTemplateRightHandBoneOffset = 0x33C;
+constexpr std::size_t kSkeletonBoneRecordsOffset = 0x0;
+constexpr std::size_t kSkeletonBoneCountOffset = 0x4;
+constexpr std::size_t kBoneRecordStride = 0xE8;
+constexpr std::size_t kBoneFinalMatrixOffset = 0x48;
+constexpr std::size_t kMatrixTranslationOffset = 0x30;
 constexpr BYTE kAnimatedMeshDrawPrefix[] = {
     0xA1, 0x44, 0x9A, 0x95, 0x00, 0x83, 0xEC, 0x18,
     0x85, 0xC0, 0x55, 0x8B, 0xE9, 0x7C, 0x36, 0x8B,
@@ -337,6 +344,47 @@ private:
     // from against the local soldier's live skeletons. This does not alter
     // classification or rendering; it answers whether visible parts use the
     // same skeleton instance the arm IK injects.
+    static bool ReadMeshName(
+        const void* animatedMesh,
+        std::array<char, 64>& name) noexcept
+    {
+        name.fill('\0');
+        if (animatedMesh == nullptr)
+        {
+            return false;
+        }
+        __try
+        {
+            const auto* const meshTemplate =
+                *reinterpret_cast<const std::byte* const*>(
+                    static_cast<const std::byte*>(animatedMesh) +
+                    kAnimatedMeshTemplateOffset);
+            if (meshTemplate == nullptr)
+            {
+                return false;
+            }
+            const auto* const nameStorage =
+                meshTemplate + kAnimatedMeshTemplateNameOffset;
+            std::size_t length = 0;
+            if (CopyPrintableAscii(
+                    reinterpret_cast<const char*>(nameStorage),
+                    name,
+                    length))
+            {
+                return true;
+            }
+            return CopyPrintableAscii(
+                *reinterpret_cast<const char* const*>(nameStorage),
+                name,
+                length);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            name.fill('\0');
+            return false;
+        }
+    }
+
     void ObserveDrawSkeleton(void* animatedMesh) noexcept
     {
         if (!deepDiagnostics_ || drawReports_ >= 1200 || animatedMesh == nullptr)
@@ -380,17 +428,73 @@ private:
             }
         }
         const auto kind = ReadCurrentPartKind();
-        wchar_t message[256] = {};
+        std::array<char, 64> meshName = {};
+        (void)ReadMeshName(animatedMesh, meshName);
+        std::int32_t handBone = -1;
+        float handX = 0.0F;
+        float handY = 0.0F;
+        float handZ = 0.0F;
+        if (soldier != nullptr && meshSkeleton != nullptr &&
+            meshSkeleton == animationSkeleton)
+        {
+            __try
+            {
+                const auto* const soldierTemplate =
+                    *reinterpret_cast<const std::byte* const*>(
+                        static_cast<const std::byte*>(soldier) +
+                        kSoldierTemplateOffset);
+                if (soldierTemplate != nullptr)
+                {
+                    const std::int32_t candidate =
+                        *reinterpret_cast<const std::int32_t*>(
+                            soldierTemplate + kTemplateRightHandBoneOffset);
+                    const std::int32_t boneCount =
+                        *reinterpret_cast<const std::int32_t*>(
+                            static_cast<const std::byte*>(meshSkeleton) +
+                            kSkeletonBoneCountOffset);
+                    std::byte* const records =
+                        *reinterpret_cast<std::byte* const*>(
+                            static_cast<const std::byte*>(meshSkeleton) +
+                            kSkeletonBoneRecordsOffset);
+                    if (records != nullptr && candidate >= 0 &&
+                        candidate < boneCount && candidate < 1024)
+                    {
+                        handBone = candidate;
+                        const float* const translation =
+                            reinterpret_cast<const float*>(
+                                records +
+                                static_cast<std::size_t>(candidate) *
+                                    kBoneRecordStride +
+                                kBoneFinalMatrixOffset +
+                                kMatrixTranslationOffset);
+                        handX = translation[0];
+                        handY = translation[1];
+                        handZ = translation[2];
+                    }
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                handBone = -1;
+            }
+        }
+        wchar_t message[512] = {};
         swprintf_s(
             message,
-            L"FPART_DRAW kind=%d mesh=%p meshSkeleton=%p animationSkeleton=%p "
-            L"animationMatch=%d collisionMatch=%d soldier=%p.",
+            L"FPART_DRAW kind=%d name=%hs mesh=%p meshSkeleton=%p "
+            L"animationSkeleton=%p animationMatch=%d collisionMatch=%d "
+            L"handBone=%ld handFinal=(%.4f,%.4f,%.4f) soldier=%p.",
             static_cast<int>(kind),
+            meshName.data(),
             animatedMesh,
             meshSkeleton,
             animationSkeleton,
             meshSkeleton != nullptr && meshSkeleton == animationSkeleton ? 1 : 0,
             meshSkeleton != nullptr && meshSkeleton == collisionSkeleton ? 1 : 0,
+            static_cast<long>(handBone),
+            handX,
+            handY,
+            handZ,
             soldier);
         WriteLog(message);
         lastDrawReportAt_ = now;
