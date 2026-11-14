@@ -229,6 +229,7 @@ add_library(BFVRClient SHARED
   client/BFSoldierFirstPersonArmProbe.cpp
   client/BFSoldierLeftGripRotationBinding.cpp
   client/BFSoldierNativeArmIk.cpp
+  client/BFSoldierArmBasisDiagnostics.cpp
   client/BFSoldierPrimarySupportPoseCache.cpp
   client/BFSoldierRightGripRotationBinding.cpp
   client/BFSoldierNativeArmPole.cpp
@@ -547,6 +548,7 @@ add_executable(BFVRUiPointerSmoothingTests
 )
 
 add_executable(BFVRRuntimeDiagnosticsTests
+  client/BFSoldierArmBasisDiagnostics.cpp
   client/D3D8RuntimeDiagnostics.cpp
   client/D3D8RuntimeDiagnosticsTests.cpp
 )

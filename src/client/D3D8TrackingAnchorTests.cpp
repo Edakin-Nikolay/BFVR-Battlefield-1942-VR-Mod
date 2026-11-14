@@ -395,6 +395,77 @@ bool TestControllerBodyBasisCorrectionMatchesFreshAnchorRebase() noexcept
             invalidResult.hands[1].aimPose.positionX,
             observedBodySample.hands[1].aimPose.positionX);
 }
+
+bool TestControllerWorldPoseStaysFixedAcrossBodyYaw() noexcept
+{
+    constexpr float radians = 0.01745329251994329577F;
+    // Active D3D8 yaw: forward +Z rotates toward +X; row-vector translation
+    // is row 3. XR poses are RH, so flip Z before composing with the body.
+    const auto rotate = [](float x, float z, float yaw) {
+        return std::array<float, 2>{
+            x * std::cos(yaw) + z * std::sin(yaw),
+            -x * std::sin(yaw) + z * std::cos(yaw)};
+    };
+    for (const float direction : {-1.0F, 1.0F})
+    for (const bool moving : {false, true})
+    {
+        bfvr::D3D8RuntimeView head = {};
+        head.orientationW = 1.0F;
+        const bfvr::D3D8TrackingContext infantry = {
+            bfvr::D3D8TrackingContextKind::Infantry, 0x1000};
+        bfvr::D3D8TrackingAnchor anchor = {};
+        bfvr::D3D8RuntimeControllerSample raw = {};
+        raw.valid = raw.sessionFocused = true;
+        for (std::size_t hand = 0; hand < 2; ++hand)
+        {
+            raw.hands[hand].gripPose = {
+                0.0F, 0.0F, 0.0F, 1.0F,
+                hand == 0 ? -0.2F : 0.3F, -0.25F, -0.4F};
+            raw.hands[hand].aimPose = {
+                0.0F, std::sin(0.1F), 0.0F, std::cos(0.1F),
+                hand == 0 ? -0.15F : 0.25F, -0.2F, -0.5F};
+        }
+        for (int frame = 0; frame <= 96; ++frame)
+        {
+            const float presentation = direction * frame * 7.5F * radians;
+            // Native body can lag while idle and catch up during movement.
+            const float body = presentation * (moving ? 1.0F : 0.25F);
+            const float callbackBody = body + direction * 3.0F * radians;
+            anchor.Update(head, true, infantry, 1'000'000'000LL + frame * 11'111'111LL,
+                0, false, true, 1.10F, 1.70F, 0.0F,
+                {frame == 0 ? 0.0F : direction * 7.5F, body, true});
+            const auto rebased = anchor.RebaseControllerSample(raw);
+            bfvr::D3D8RuntimeControllerSample corrected = {};
+            if (!bfvr::RebaseInfantryControllerSampleToCurrentBodyYaw(
+                    rebased, body, callbackBody, corrected)) return false;
+            const float originX = moving ? 10.0F + frame * 0.02F : 0.0F;
+            const float originZ = moving ? -4.0F + frame * 0.03F : 0.0F;
+            for (std::size_t hand = 0; hand < 2; ++hand)
+            for (const bool aim : {false, true})
+            {
+                const auto& input = aim ? raw.hands[hand].aimPose : raw.hands[hand].gripPose;
+                const auto& output = aim ? corrected.hands[hand].aimPose : corrected.hands[hand].gripPose;
+                auto actual = rotate(output.positionX, -output.positionZ, callbackBody);
+                auto expected = rotate(input.positionX, -input.positionZ, presentation);
+                actual[0] += originX; actual[1] += originZ;
+                expected[0] += originX; expected[1] += originZ;
+                const float nativeYaw = -2.0F * std::atan2(output.orientationY, output.orientationW);
+                const float expectedYaw = presentation - (aim ? 0.2F : 0.0F);
+                if (!NearlyEqual(actual[0], expected[0]) ||
+                    !NearlyEqual(actual[1], expected[1]) ||
+                    !NearlyEqual(output.positionY, input.positionY) ||
+                    !NearlyEqual(std::sin(nativeYaw + callbackBody), std::sin(expectedYaw)) ||
+                    !NearlyEqual(std::cos(nativeYaw + callbackBody), std::cos(expectedYaw)))
+                {
+                    std::fprintf(stderr, "World basis invariant: frame=%d moving=%d direction=%.0f hand=%zu aim=%d\n",
+                        frame, moving, direction, hand, aim);
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
 } // namespace
 
 int main()
@@ -404,7 +475,8 @@ int main()
         !TestVehicleSeatChangeAndExitShareCommittedGeneration() ||
         !TestInfantryPresentationIgnoresNativeAimAndOwnsArtificialTurn() ||
         !TestInfantryPresentationTurnsThroughTransientBodyYawLoss() ||
-        !TestControllerBodyBasisCorrectionMatchesFreshAnchorRebase())
+        !TestControllerBodyBasisCorrectionMatchesFreshAnchorRebase() ||
+        !TestControllerWorldPoseStaysFixedAcrossBodyYaw())
     {
         std::fprintf(
             stderr,

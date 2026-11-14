@@ -1,4 +1,5 @@
 #include "client/BFSoldierNativeArmIk.h"
+#include "client/BFSoldierArmBasisDiagnostics.h"
 #include "client/BFSoldierNativeArmMath.h"
 #include "client/BFSoldierBoneResolver.h"
 #include "client/BFSoldierAttachmentPosePairer.h"
@@ -226,6 +227,7 @@ public:
             return enabled_;
         }
         appendLog_ = log;
+        armBasisDiagnostics_.Configure(log);
         wchar_t enabled[2] = {};
         if (GetEnvironmentVariableW(
                 kEnableNativeArmIkEnvironment,
@@ -533,6 +535,18 @@ private:
             }
             self->armPole_.CaptureSolvedEndpoints(
                 rightRestore.boneRecord, leftRestore.boneRecord);
+            if (rightFrame.valid && rightRestore.active &&
+                _ReturnAddress() == self->gameImage_ + kVisibleArmSkeletonCallerReturnRva)
+            {
+                self->armBasisDiagnostics_.Observe(
+                    effectiveRootTransform, rightFrame.inverseSoldierWorld,
+                    rightRestore.targetPosition,
+                    reinterpret_cast<const Matrix4*>(rightRestore.boneRecord + kBoneFinalMatrixOffset),
+                    leftRestore.targetPosition,
+                    leftRestore.active ? reinterpret_cast<const Matrix4*>(
+                        leftRestore.boneRecord + kBoneFinalMatrixOffset) : nullptr,
+                    rightFrame.controllerGeneration, rightFrame.soldier);
+            }
             self->CaptureInjectedMotionProbe(rightRestore);
         }
         __finally
@@ -2494,6 +2508,7 @@ private:
     bool activeItemAlignmentValid_ = false;
     bool activeItemLeftSupportPoseValid_ = false;
     bfvr::BFSoldierBoneResolver boneResolver_ = {};
+    bfvr::BFSoldierArmBasisDiagnostics armBasisDiagnostics_ = {};
     bfvr::BFSoldierNativeArmPole armPole_ = {};
     bfvr::BFSoldierVrArmFoundation armFoundation_ = {};
     void* cachedLeftHandSkeleton_ = nullptr;
