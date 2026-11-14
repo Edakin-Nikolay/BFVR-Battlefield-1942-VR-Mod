@@ -60,7 +60,11 @@ merge, tag, publish, or modify either remote branch.
 Rendering, state restoration, and startup device discovery required for VR are
 not disabled by `off`.
 
-The native `BFVR.exe` retains the explicit diagnostic command-line options.
+The native `BFVR.exe` also accepts `--diagnostics <off|normal|deep>`, which
+overrides the diagnostic level the launcher would apply; the default remains
+`off`, any non-`off` value implies a normal player launch, and the option
+validates its value and fails closed on anything else. Without the option, the
+launcher sets `BFVR_DIAGNOSTICS=off`.
 Separate probe/test executables are development build products and must not be
 placed in a player package. The outer working checkout's
 `Launch-BFVR-VR.bat` is a development convenience only.

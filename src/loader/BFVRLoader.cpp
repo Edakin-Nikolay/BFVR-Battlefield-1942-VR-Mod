@@ -52,6 +52,7 @@ struct Options
     bool playerLaunch = false;
     bool bf42PlusPlus = false;
     bool interopDiagnostics = false;
+    std::wstring diagnostics = L"off";
     bool dryRun = false;
     bool showHelp = false;
     bool presentBridgeProbe = false;
@@ -473,6 +474,19 @@ bool ParseOptions(int argc, wchar_t* argv[], Options& options)
         {
             options.interopDiagnostics = true;
         }
+        else if (argument == L"--diagnostics")
+        {
+            const std::wstring level =
+                RequireValue(argc, argv, index, L"--diagnostics");
+            if (level != L"off" && level != L"normal" && level != L"deep")
+            {
+                fwprintf(
+                    stderr,
+                    L"[FAIL] --diagnostics must be off, normal, or deep.\n");
+                return false;
+            }
+            options.diagnostics = level;
+        }
         else if (argument == L"--present-bridge-probe")
         {
             options.presentBridgeProbe = true;
@@ -629,7 +643,7 @@ bool ParseOptions(int argc, wchar_t* argv[], Options& options)
         }
     }
 
-    if (options.interopDiagnostics)
+    if (options.interopDiagnostics || options.diagnostics != L"off")
     {
         options.playerLaunch = true;
     }
@@ -815,6 +829,7 @@ void PrintUsage()
     wprintf(L"A diagnostic timeout closes only the game process started by this loader after the requested observation window. --run-until-stopped keeps the combined translated OpenXR test active for BF1942's process lifetime.\n");
     wprintf(L"Usage: BFVR [--play] [--dry-run] [developer diagnostic options] [--game-root <path>] [--client <path>] [-- <game arguments>]\n");
     wprintf(L"--interop-diagnostics starts the normal BFVR player path and records a one-run loader, BF42++, D3D9Ex/D3D11 shared-texture, and OpenXR diagnostic bundle.\n");
+    wprintf(L"--diagnostics <off|normal|deep> overrides the player diagnostic level; off remains the default and deep enables opt-in arm-basis samples.\n");
     wprintf(L"The loader starts BF1942.exe suspended, loads BFVRClient.dll from the BFVR folder, then resumes it.\n");
     wprintf(L"--present-bridge-probe is an explicit active test: it installs a no-op in-process D3D8 Present detour only after the verified D3D8 lifecycle trace completes.\n");
     wprintf(L"--surface-descriptor-probe is a separate explicit one-shot test: at the passively confirmed ordinary-world Projection submission it calls GetRenderTarget/GetDesc/Release on the same D3D8 thread.\n");
@@ -1430,10 +1445,11 @@ ReplacementProcess FindBf1942Replacement(
 
 bool SetPlayerEnvironment(
     const std::wstring& payloadDirectory,
-    bool interopDiagnosticsEnabled)
+    bool interopDiagnosticsEnabled,
+    const std::wstring& diagnostics)
 {
     const std::pair<const wchar_t*, std::wstring> values[] = {
-        {L"BFVR_DIAGNOSTICS", L"off"},
+        {L"BFVR_DIAGNOSTICS", diagnostics},
         {L"BFVR_USER_CONFIG_PATH", Combine(payloadDirectory, L"UserConfig.txt")},
         {L"BFVR_OPENXR_AO", L"1"},
         {L"BFVR_OPENXR_SSGI", L"0"},
@@ -1730,7 +1746,8 @@ int wmain(int argc, wchar_t* argv[])
     if (options.playerLaunch &&
            (!SetPlayerEnvironment(
                payloadDirectory,
-               options.interopDiagnostics) ||
+               options.interopDiagnostics,
+               options.diagnostics) ||
          !startupMovies.Suspend(options.gameRoot)))
     {
         return 2;
@@ -1745,7 +1762,9 @@ int wmain(int argc, wchar_t* argv[])
     std::vector<wchar_t> mutableCommandLine(commandLine.begin(), commandLine.end());
     const std::wstring playerStartMessage =
         std::wstring(L"Starting BFVR ") + bfvr::kVersionString +
-        L" with player diagnostics disabled.";
+        (options.diagnostics == L"off"
+            ? L" with player diagnostics disabled."
+            : L" with player diagnostics " + options.diagnostics + L".");
     AppendLoaderLog(options.playerLaunch
             ? playerStartMessage.c_str()
             : options.weaponMotionProbe
