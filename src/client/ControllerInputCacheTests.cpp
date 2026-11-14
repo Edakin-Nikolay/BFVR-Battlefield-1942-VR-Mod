@@ -63,7 +63,13 @@ bool TestNativeAimSampleIsIndependentFromPresentationRebase() noexcept
             pairedPresentationYawValid,
             pairedGeneration,
             1000);
-    return presentationRead && nativeAimRead && pairedRead &&
+    float latestPresentationYaw = 0.0F;
+    bool latestPresentationYawValid = false;
+    const bool latestRead = bfvr::ReadLatestAcceptedPresentationYaw(
+        latestPresentationYaw, latestPresentationYawValid, 1000);
+    return presentationRead && nativeAimRead && pairedRead && latestRead &&
+        latestPresentationYawValid &&
+        Near(latestPresentationYaw, -0.4F) &&
         presentationGeneration > 0 &&
         presentationGeneration == nativeAimGeneration &&
         presentationGeneration == pairedGeneration &&
@@ -84,6 +90,9 @@ bool TestClearFailsClosed() noexcept
     bool presentationYawValid = true;
     LONG generation = 0;
     return !bfvr::ReadFreshAcceptedControllerInput(sample, generation, 1000) &&
+        !(bfvr::ReadLatestAcceptedPresentationYaw(
+              presentationYaw, presentationYawValid, 1000) &&
+          presentationYawValid) &&
         !bfvr::ReadFreshAcceptedInfantryPresentationInput(
             sample,
             bodyYaw,

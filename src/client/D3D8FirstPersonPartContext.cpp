@@ -1,5 +1,7 @@
 #include "client/D3D8FirstPersonPartContext.h"
+#include "client/BFSoldierVrArmTracking.h"
 #include "client/BFSoldierVrMotionFilter.h"
+#include "client/ControllerInputCache.h"
 #include "client/D3D8RuntimeDiagnostics.h"
 
 #include <MinHook.h>
@@ -7,6 +9,7 @@
 #include <windows.h>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -430,6 +433,34 @@ private:
         const auto kind = ReadCurrentPartKind();
         std::array<char, 64> meshName = {};
         (void)ReadMeshName(animatedMesh, meshName);
+        float drawSoldierYawDeg = NAN;
+        float drawSoldierX = 0.0F;
+        float drawSoldierY = 0.0F;
+        float drawSoldierZ = 0.0F;
+        if (soldier != nullptr)
+        {
+            const auto drawTransform =
+                bfvr::ReadBf1942ObjectTransform(soldier);
+            if (drawTransform.has_value())
+            {
+                const auto yaw =
+                    bfvr::native_arm_math::ExtractBodyYaw(*drawTransform);
+                if (yaw.has_value())
+                {
+                    drawSoldierYawDeg = *yaw * 57.295779513F;
+                }
+                drawSoldierX = drawTransform->values[3][0];
+                drawSoldierY = drawTransform->values[3][1];
+                drawSoldierZ = drawTransform->values[3][2];
+            }
+        }
+        float drawPresentationYawRadians = 0.0F;
+        bool drawPresentationYawValid = false;
+        (void)bfvr::ReadLatestAcceptedPresentationYaw(
+            drawPresentationYawRadians, drawPresentationYawValid, 250);
+        const float drawPresentationYawDeg = drawPresentationYawValid
+            ? drawPresentationYawRadians * 57.295779513F
+            : NAN;
         std::int32_t handBone = -1;
         float handX = 0.0F;
         float handY = 0.0F;
@@ -478,12 +509,25 @@ private:
                 handBone = -1;
             }
         }
-        wchar_t message[512] = {};
+        float drawnViewHandYawDeg = NAN;
+        if (handBone >= 0 && std::isfinite(drawSoldierYawDeg))
+        {
+            const float localYawDeg =
+                std::atan2(handX, handZ) * 57.295779513F;
+            const float worldYawDeg = localYawDeg + drawSoldierYawDeg;
+            if (std::isfinite(drawPresentationYawDeg))
+            {
+                drawnViewHandYawDeg = worldYawDeg - drawPresentationYawDeg;
+            }
+        }
+        wchar_t message[768] = {};
         swprintf_s(
             message,
             L"FPART_DRAW kind=%d name=%hs mesh=%p meshSkeleton=%p "
             L"animationSkeleton=%p animationMatch=%d collisionMatch=%d "
-            L"handBone=%ld handFinal=(%.4f,%.4f,%.4f) soldier=%p.",
+            L"handBone=%ld handFinal=(%.4f,%.4f,%.4f) "
+            L"drawYaw=%.3f drawOrigin=(%.3f,%.3f,%.3f) "
+            L"drawPresYaw=%.3f drawViewHandYaw=%.3f soldier=%p.",
             static_cast<int>(kind),
             meshName.data(),
             animatedMesh,
@@ -495,6 +539,12 @@ private:
             handX,
             handY,
             handZ,
+            drawSoldierYawDeg,
+            drawSoldierX,
+            drawSoldierY,
+            drawSoldierZ,
+            drawPresentationYawDeg,
+            drawnViewHandYawDeg,
             soldier);
         WriteLog(message);
         lastDrawReportAt_ = now;

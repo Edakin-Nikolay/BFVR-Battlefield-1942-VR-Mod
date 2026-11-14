@@ -29,6 +29,43 @@ LONG NextGeneration(LONG current) noexcept
 
 namespace bfvr
 {
+bool ReadLatestAcceptedPresentationYaw(
+    float& yawRadians,
+    bool& yawValid,
+    const DWORD maximumAgeMs) noexcept
+{
+    yawRadians = 0.0F;
+    yawValid = false;
+    for (int attempt = 0; attempt < 2; ++attempt)
+    {
+        const LONG firstGeneration =
+            InterlockedCompareExchange(&g_publishedGeneration, 0, 0);
+        if (firstGeneration == 0)
+        {
+            return false;
+        }
+        const ControllerInputCacheSlot& source =
+            g_slots[static_cast<std::size_t>(firstGeneration) % g_slots.size()];
+        const float yawSnapshot = source.presentationYawRadians;
+        const bool validSnapshot = source.presentationYawValid;
+        const DWORD publishedAt = source.publishedAt;
+        MemoryBarrier();
+        if (InterlockedCompareExchange(&g_publishedGeneration, 0, 0) !=
+            firstGeneration)
+        {
+            continue;
+        }
+        if (GetTickCount() - publishedAt > maximumAgeMs)
+        {
+            return false;
+        }
+        yawRadians = yawSnapshot;
+        yawValid = validSnapshot;
+        return true;
+    }
+    return false;
+}
+
 void PublishAcceptedControllerInput(
     const D3D8RuntimeControllerSample& sample,
     const D3D8RuntimeControllerSample& nativeAimSample,

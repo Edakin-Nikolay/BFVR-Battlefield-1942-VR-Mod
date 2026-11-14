@@ -58,4 +58,11 @@ void ClearAcceptedControllerInput() noexcept;
     LONG& generation,
     DWORD maximumAgeMs) noexcept;
 
+// Reads only the presentation yaw of the latest accepted sample. Used by
+// bounded diagnostics that already hold an independent pose snapshot.
+[[nodiscard]] bool ReadLatestAcceptedPresentationYaw(
+    float& yawRadians,
+    bool& yawValid,
+    DWORD maximumAgeMs) noexcept;
+
 } // namespace bfvr
