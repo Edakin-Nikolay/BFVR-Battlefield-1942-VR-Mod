@@ -198,6 +198,8 @@ struct RightHandFrameContext
     bfvr::stereo::ArmVrShoulderAnchors shoulderAnchors = {};
     bfvr::settings::UserSettingsValues armSettings = {};
     LONG controllerGeneration = 0;
+    float observedBodyYawRadians = 0.0F;
+    bool observedBodyYawValid = false;
     LONG activeItemIndex = -1;
     bool shoulderAnchorsValid = false;
     bool valid = false;
@@ -545,6 +547,8 @@ private:
                     leftRestore.targetPosition,
                     leftRestore.active ? reinterpret_cast<const Matrix4*>(
                         leftRestore.boneRecord + kBoneFinalMatrixOffset) : nullptr,
+                    rightFrame.observedBodyYawRadians,
+                    rightFrame.observedBodyYawValid,
                     rightFrame.controllerGeneration, rightFrame.soldier);
             }
             self->CaptureInjectedMotionProbe(rightRestore);
@@ -902,12 +906,16 @@ private:
         bfvr::D3D8RuntimeControllerSample& sample,
         LONG& generation,
         Matrix4& soldierTransform,
-        std::array<float, 3>& trackedHeadSkeleton) noexcept
+        std::array<float, 3>& trackedHeadSkeleton,
+        float& observedBodyYawRadians,
+        bool& observedBodyYawValid) noexcept
     {
         sample = {};
         generation = 0;
         soldierTransform = {};
         trackedHeadSkeleton = {};
+        observedBodyYawRadians = 0.0F;
+        observedBodyYawValid = false;
         const auto currentSoldierTransform =
             bfvr::ReadBf1942ObjectTransform(soldier);
         if (!currentSoldierTransform.has_value())
@@ -926,6 +934,8 @@ private:
         sample = tracking.controllers;
         generation = tracking.generation;
         trackedHeadSkeleton = tracking.headSkeletonPosition;
+        observedBodyYawRadians = tracking.observedBodyYawRadians;
+        observedBodyYawValid = tracking.observedBodyYawValid;
         return true;
     }
 
@@ -972,12 +982,16 @@ private:
         LONG generation = 0;
         Matrix4 sameCallbackSoldierTransform = {};
         std::array<float, 3> trackedHeadSkeleton = {};
+        float observedBodyYawRadians = 0.0F;
+        bool observedBodyYawValid = false;
         if (!ReadCurrentArmControllerSample(
                 soldier,
                 sample,
                 generation,
                 sameCallbackSoldierTransform,
-                trackedHeadSkeleton) ||
+                trackedHeadSkeleton,
+                observedBodyYawRadians,
+                observedBodyYawValid) ||
             !IsTrackedGrip(sample.hands[kRightControllerHand]) ||
             !IsTrackedAim(sample.hands[kRightControllerHand]))
         {
@@ -1585,6 +1599,8 @@ private:
                 frame.shoulderAnchorsValid = true;
             }
             frame.controllerGeneration = generation;
+            frame.observedBodyYawRadians = observedBodyYawRadians;
+            frame.observedBodyYawValid = observedBodyYawValid;
             frame.activeItemIndex = alignment.activeItemIndex;
             frame.valid = true;
             InterlockedIncrement(&injectedFrames_);
@@ -1639,12 +1655,16 @@ private:
         LONG generation = 0;
         Matrix4 sameCallbackSoldierTransform = {};
         std::array<float, 3> trackedHeadSkeleton = {};
+        float observedBodyYawRadians = 0.0F;
+        bool observedBodyYawValid = false;
         if (!ReadCurrentArmControllerSample(
                 soldier,
                 sample,
                 generation,
                 sameCallbackSoldierTransform,
-                trackedHeadSkeleton) ||
+                trackedHeadSkeleton,
+                observedBodyYawRadians,
+                observedBodyYawValid) ||
             !IsTrackedGrip(sample.hands[kLeftControllerHand]))
         {
             leftGripRotationBinding_.ResetTransient();

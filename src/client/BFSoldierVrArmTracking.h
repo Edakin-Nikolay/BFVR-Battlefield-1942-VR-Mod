@@ -14,6 +14,10 @@ struct BFSoldierVrArmTracking
     D3D8RuntimeControllerSample controllers = {};
     std::array<float, 3> headSkeletonPosition = {};
     LONG generation = 0;
+    // Body yaw observed when this accepted input was published. The arm hook
+    // rebases from it to the live soldier yaw; diagnostics compare the two.
+    float observedBodyYawRadians = 0.0F;
+    bool observedBodyYawValid = false;
 };
 
 struct BFSoldierVrPoseCameraTranslation

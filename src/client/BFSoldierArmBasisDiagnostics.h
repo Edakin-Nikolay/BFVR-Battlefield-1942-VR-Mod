@@ -22,6 +22,8 @@ public:
         const stereo::Matrix4* rightSolved,
         const std::array<float, 3>& leftTarget,
         const stereo::Matrix4* leftSolved,
+        float observedBodyYawRadians,
+        bool observedBodyYawValid,
         LONG controllerGeneration,
         const void* soldier) noexcept;
 

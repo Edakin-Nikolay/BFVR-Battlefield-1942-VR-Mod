@@ -48,6 +48,8 @@ void BFSoldierArmBasisDiagnostics::Observe(
     const stereo::Matrix4* rightSolved,
     const std::array<float, 3>& leftTarget,
     const stereo::Matrix4* leftSolved,
+    const float observedBodyYawRadians,
+    const bool observedBodyYawValid,
     const LONG controllerGeneration,
     const void* soldier) noexcept
 {
@@ -67,6 +69,7 @@ void BFSoldierArmBasisDiagnostics::Observe(
     _snwprintf_s(
         message.data(), message.size(), _TRUNCATE,
         L"ARM_BASIS generation=%ld soldier=%p rootYawDeg=%.3f bodyYawDeg=%.3f "
+        L"observedBodyYawDeg=%.3f bodyYawDeltaDeg=%.3f observedBodyYawValid=%d "
         L"rootInBodyYawDeg=%.3f rootOrigin=(%.4f,%.4f,%.4f) "
         L"bodyOrigin=(%.4f,%.4f,%.4f) "
         L"rightTarget=(%.4f,%.4f,%.4f) rightSolved=(%.4f,%.4f,%.4f) "
@@ -75,7 +78,13 @@ void BFSoldierArmBasisDiagnostics::Observe(
         L"Targets and solved positions are native Skeleton-space candidates; "
         L"root/world ownership is diagnostic, not assumed.",
         controllerGeneration, soldier,
-        YawDegrees(root), YawDegrees(*soldierWorld), YawDegrees(rootInSoldier),
+        YawDegrees(root), YawDegrees(*soldierWorld),
+        observedBodyYawValid ? observedBodyYawRadians * 57.295779513F : NAN,
+        observedBodyYawValid
+            ? (YawDegrees(*soldierWorld) - observedBodyYawRadians * 57.295779513F)
+            : NAN,
+        observedBodyYawValid ? 1 : 0,
+        YawDegrees(rootInSoldier),
         root.values[3][0], root.values[3][1], root.values[3][2],
         soldierWorld->values[3][0], soldierWorld->values[3][1], soldierWorld->values[3][2],
         rightTarget[0], rightTarget[1], rightTarget[2],

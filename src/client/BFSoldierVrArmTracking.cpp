@@ -136,6 +136,8 @@ bool ReadFreshBFSoldierVrArmTracking(
 
     if (observedBodyYawValid)
     {
+        result.observedBodyYawRadians = observedBodyYaw;
+        result.observedBodyYawValid = true;
         const auto currentBodyYaw =
             native_arm_math::ExtractBodyYaw(soldierTransform);
         if (!currentBodyYaw.has_value())
