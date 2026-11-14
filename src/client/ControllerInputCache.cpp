@@ -13,6 +13,8 @@ struct ControllerInputCacheSlot
     bool matchingHeadTracked = false;
     float presentationBodyYawRadians = 0.0F;
     bool presentationBodyYawValid = false;
+    float presentationYawRadians = 0.0F;
+    bool presentationYawValid = false;
     DWORD publishedAt = 0;
 };
 
@@ -33,7 +35,9 @@ void PublishAcceptedControllerInput(
     const D3D8RuntimeView& matchingHead,
     const bool matchingHeadTracked,
     const float presentationBodyYawRadians,
-    const bool presentationBodyYawValid) noexcept
+    const bool presentationBodyYawValid,
+    const float presentationYawRadians,
+    const bool presentationYawValid) noexcept
 {
     const LONG next = NextGeneration(
         InterlockedCompareExchange(&g_publishedGeneration, 0, 0));
@@ -45,6 +49,8 @@ void PublishAcceptedControllerInput(
     destination.matchingHeadTracked = matchingHeadTracked;
     destination.presentationBodyYawRadians = presentationBodyYawRadians;
     destination.presentationBodyYawValid = presentationBodyYawValid;
+    destination.presentationYawRadians = presentationYawRadians;
+    destination.presentationYawValid = presentationYawValid;
     destination.publishedAt = GetTickCount();
     MemoryBarrier();
     InterlockedExchange(&g_publishedGeneration, next);
@@ -52,7 +58,7 @@ void PublishAcceptedControllerInput(
 
 void ClearAcceptedControllerInput() noexcept
 {
-    PublishAcceptedControllerInput({}, {}, {}, false, 0.0F, false);
+    PublishAcceptedControllerInput({}, {}, {}, false, 0.0F, false, 0.0F, false);
 }
 
 bool ReadFreshAcceptedControllerInput(
@@ -133,12 +139,16 @@ bool ReadFreshAcceptedInfantryPresentationInput(
     D3D8RuntimeControllerSample& sample,
     float& presentationBodyYawRadians,
     bool& presentationBodyYawValid,
+    float& presentationYawRadians,
+    bool& presentationYawValid,
     LONG& generation,
     const DWORD maximumAgeMs) noexcept
 {
     sample = {};
     presentationBodyYawRadians = 0.0F;
     presentationBodyYawValid = false;
+    presentationYawRadians = 0.0F;
+    presentationYawValid = false;
     generation = 0;
     for (int attempt = 0; attempt < 2; ++attempt)
     {
@@ -153,6 +163,8 @@ bool ReadFreshAcceptedInfantryPresentationInput(
         const D3D8RuntimeControllerSample sampleSnapshot = source.sample;
         const float bodyYawSnapshot = source.presentationBodyYawRadians;
         const bool bodyYawValidSnapshot = source.presentationBodyYawValid;
+        const float presentationYawSnapshot = source.presentationYawRadians;
+        const bool presentationYawValidSnapshot = source.presentationYawValid;
         const DWORD publishedAt = source.publishedAt;
         MemoryBarrier();
         if (InterlockedCompareExchange(&g_publishedGeneration, 0, 0) !=
@@ -168,6 +180,8 @@ bool ReadFreshAcceptedInfantryPresentationInput(
         sample = sampleSnapshot;
         presentationBodyYawRadians = bodyYawSnapshot;
         presentationBodyYawValid = bodyYawValidSnapshot;
+        presentationYawRadians = presentationYawSnapshot;
+        presentationYawValid = presentationYawValidSnapshot;
         generation = firstGeneration;
         return true;
     }

@@ -31,6 +31,8 @@ bool TestNativeAimSampleIsIndependentFromPresentationRebase() noexcept
         matchingHead,
         true,
         0.75F,
+        true,
+        -0.4F,
         true);
 
     bfvr::D3D8RuntimeControllerSample readPresentation = {};
@@ -49,12 +51,16 @@ bool TestNativeAimSampleIsIndependentFromPresentationRebase() noexcept
     bfvr::D3D8RuntimeControllerSample pairedPresentation = {};
     float pairedBodyYaw = 0.0F;
     bool pairedBodyYawValid = false;
+    float pairedPresentationYaw = 0.0F;
+    bool pairedPresentationYawValid = false;
     LONG pairedGeneration = 0;
     const bool pairedRead =
         bfvr::ReadFreshAcceptedInfantryPresentationInput(
             pairedPresentation,
             pairedBodyYaw,
             pairedBodyYawValid,
+            pairedPresentationYaw,
+            pairedPresentationYawValid,
             pairedGeneration,
             1000);
     return presentationRead && nativeAimRead && pairedRead &&
@@ -64,7 +70,8 @@ bool TestNativeAimSampleIsIndependentFromPresentationRebase() noexcept
         Near(readPresentation.hands[1].aimPose.orientationY, 0.41F) &&
         Near(readNativeAim.hands[1].aimPose.orientationY, -0.17F) &&
         Near(pairedPresentation.hands[1].aimPose.orientationY, 0.41F) &&
-        pairedBodyYawValid && Near(pairedBodyYaw, 0.75F);
+        pairedBodyYawValid && Near(pairedBodyYaw, 0.75F) &&
+        pairedPresentationYawValid && Near(pairedPresentationYaw, -0.4F);
 }
 
 bool TestClearFailsClosed() noexcept
@@ -73,12 +80,16 @@ bool TestClearFailsClosed() noexcept
     bfvr::D3D8RuntimeControllerSample sample = {};
     float bodyYaw = 0.0F;
     bool bodyYawValid = true;
+    float presentationYaw = 0.0F;
+    bool presentationYawValid = true;
     LONG generation = 0;
     return !bfvr::ReadFreshAcceptedControllerInput(sample, generation, 1000) &&
         !bfvr::ReadFreshAcceptedInfantryPresentationInput(
             sample,
             bodyYaw,
             bodyYawValid,
+            presentationYaw,
+            presentationYawValid,
             generation,
             1000) &&
         !bfvr::ReadFreshAcceptedNativeInfantryAimInput(

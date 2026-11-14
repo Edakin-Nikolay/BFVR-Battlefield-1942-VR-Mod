@@ -298,6 +298,10 @@ void PrepareRuntimeRenderRequestPose()
     }
     if (g_runtimeRenderRequest.controllerInput.valid)
     {
+        float presentationYawRadians = 0.0F;
+        const bool presentationYawValid =
+            g_trackingAnchor.ReadInfantryPresentationYaw(
+                presentationYawRadians);
         bfvr::PublishAcceptedControllerInput(
             g_trackingAnchor.RebaseControllerSample(
                 g_runtimeRenderRequest.controllerInput),
@@ -305,7 +309,9 @@ void PrepareRuntimeRenderRequestPose()
             rebasedHead,
             hasTrackedHead,
             infantryBodyYawRadians,
-            infantryBodyYawValid);
+            infantryBodyYawValid,
+            presentationYawRadians,
+            presentationYawValid);
     }
     else
     {

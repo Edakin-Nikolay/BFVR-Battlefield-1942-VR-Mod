@@ -17,7 +17,9 @@ void PublishAcceptedControllerInput(
     const D3D8RuntimeView& matchingHead,
     bool matchingHeadTracked,
     float presentationBodyYawRadians,
-    bool presentationBodyYawValid) noexcept;
+    bool presentationBodyYawValid,
+    float presentationYawRadians,
+    bool presentationYawValid) noexcept;
 void ClearAcceptedControllerInput() noexcept;
 
 [[nodiscard]] bool ReadFreshAcceptedControllerInput(
@@ -33,6 +35,8 @@ void ClearAcceptedControllerInput() noexcept;
     D3D8RuntimeControllerSample& sample,
     float& presentationBodyYawRadians,
     bool& presentationBodyYawValid,
+    float& presentationYawRadians,
+    bool& presentationYawValid,
     LONG& generation,
     DWORD maximumAgeMs) noexcept;
 

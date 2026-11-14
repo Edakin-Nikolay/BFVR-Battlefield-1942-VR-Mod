@@ -24,6 +24,8 @@ public:
         const stereo::Matrix4* leftSolved,
         float observedBodyYawRadians,
         bool observedBodyYawValid,
+        float presentationYawRadians,
+        bool presentationYawValid,
         LONG controllerGeneration,
         const void* soldier) noexcept;
 

@@ -50,6 +50,8 @@ void BFSoldierArmBasisDiagnostics::Observe(
     const stereo::Matrix4* leftSolved,
     const float observedBodyYawRadians,
     const bool observedBodyYawValid,
+    const float presentationYawRadians,
+    const bool presentationYawValid,
     const LONG controllerGeneration,
     const void* soldier) noexcept
 {
@@ -65,11 +67,19 @@ void BFSoldierArmBasisDiagnostics::Observe(
     if (!soldierWorld.has_value()) return;
     const bool leftValid = CopyMatrix(leftSolved, left);
     const auto rootInSoldier = native_arm_math::Multiply(root, inverseSoldierWorld);
+    const float bodyYawDeg = YawDegrees(*soldierWorld);
+    const float targetYawDeg =
+        (rightTarget[0] != 0.0F || rightTarget[2] != 0.0F)
+            ? std::atan2(rightTarget[0], rightTarget[2]) * 57.295779513F
+            : NAN;
+    const float worldHandYawDeg = bodyYawDeg + targetYawDeg;
     std::array<wchar_t, 1200> message = {};
     _snwprintf_s(
         message.data(), message.size(), _TRUNCATE,
         L"ARM_BASIS generation=%ld soldier=%p rootYawDeg=%.3f bodyYawDeg=%.3f "
         L"observedBodyYawDeg=%.3f bodyYawDeltaDeg=%.3f observedBodyYawValid=%d "
+        L"presentationYawDeg=%.3f presentationYawValid=%d "
+        L"worldHandYawDeg=%.3f viewHandYawDeg=%.3f "
         L"rootInBodyYawDeg=%.3f rootOrigin=(%.4f,%.4f,%.4f) "
         L"bodyOrigin=(%.4f,%.4f,%.4f) "
         L"rightTarget=(%.4f,%.4f,%.4f) rightSolved=(%.4f,%.4f,%.4f) "
@@ -78,12 +88,18 @@ void BFSoldierArmBasisDiagnostics::Observe(
         L"Targets and solved positions are native Skeleton-space candidates; "
         L"root/world ownership is diagnostic, not assumed.",
         controllerGeneration, soldier,
-        YawDegrees(root), YawDegrees(*soldierWorld),
+        YawDegrees(root), bodyYawDeg,
         observedBodyYawValid ? observedBodyYawRadians * 57.295779513F : NAN,
         observedBodyYawValid
-            ? (YawDegrees(*soldierWorld) - observedBodyYawRadians * 57.295779513F)
+            ? (bodyYawDeg - observedBodyYawRadians * 57.295779513F)
             : NAN,
         observedBodyYawValid ? 1 : 0,
+        presentationYawValid ? presentationYawRadians * 57.295779513F : NAN,
+        presentationYawValid ? 1 : 0,
+        worldHandYawDeg,
+        presentationYawValid
+            ? worldHandYawDeg - presentationYawRadians * 57.295779513F
+            : NAN,
         YawDegrees(rootInSoldier),
         root.values[3][0], root.values[3][1], root.values[3][2],
         soldierWorld->values[3][0], soldierWorld->values[3][1], soldierWorld->values[3][2],

@@ -32,13 +32,13 @@ bool TestArmBasisDiagnostics() noexcept
         if (!SetEnvironmentVariableW(key, level)) passed = false;
         diagnostics.Configure(Capture);
         diagnostics.Observe(&identity, identity, target, &solved,
-            {}, nullptr, 0.0F, false, 7, nullptr);
+            {}, nullptr, 0.0F, false, 0.0F, false, 7, nullptr);
         passed = passed && reports == 0;
     }
     if (!SetEnvironmentVariableW(key, L"deep")) passed = false;
     diagnostics.Configure(Capture);
     diagnostics.Observe(&identity, identity, target, &solved,
-        {}, nullptr, 0.0F, false, 7, nullptr);
+        {}, nullptr, 0.0F, false, 0.0F, false, 7, nullptr);
     passed = passed && reports == 1 &&
         lastReport.find(L"ARM_BASIS generation=7") != std::wstring::npos &&
         lastReport.find(L"rightError=(0.0500,0.0000,0.0000)") != std::wstring::npos &&
@@ -46,11 +46,11 @@ bool TestArmBasisDiagnostics() noexcept
         lastReport.find(L"leftValid=0") != std::wstring::npos;
     diagnostics.Configure(Capture);
     diagnostics.Observe(nullptr, identity, target, &solved,
-        {}, nullptr, 0.0F, false, 8, nullptr);
+        {}, nullptr, 0.0F, false, 0.0F, false, 8, nullptr);
     passed = passed && reports == 1;
     diagnostics.Configure(nullptr);
     diagnostics.Observe(&identity, identity, target, &solved,
-        {}, nullptr, 0.0F, false, 9, nullptr);
+        {}, nullptr, 0.0F, false, 0.0F, false, 9, nullptr);
     passed = passed && reports == 1;
     if (!SetEnvironmentVariableW(key, size == 0 ? nullptr : saved.c_str())) passed = false;
     return passed;

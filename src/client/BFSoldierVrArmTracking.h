@@ -18,6 +18,8 @@ struct BFSoldierVrArmTracking
     // rebases from it to the live soldier yaw; diagnostics compare the two.
     float observedBodyYawRadians = 0.0F;
     bool observedBodyYawValid = false;
+    float presentationYawRadians = 0.0F;
+    bool presentationYawValid = false;
 };
 
 struct BFSoldierVrPoseCameraTranslation

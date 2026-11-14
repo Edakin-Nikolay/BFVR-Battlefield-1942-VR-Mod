@@ -111,10 +111,14 @@ bool ReadFreshBFSoldierVrArmTracking(
     result = {};
     float observedBodyYaw = 0.0F;
     bool observedBodyYawValid = false;
+    float presentationYaw = 0.0F;
+    bool presentationYawValid = false;
     if (!ReadFreshAcceptedInfantryPresentationInput(
             result.controllers,
             observedBodyYaw,
             observedBodyYawValid,
+            presentationYaw,
+            presentationYawValid,
             result.generation,
             maximumAgeMs))
     {
@@ -179,6 +183,8 @@ bool ReadFreshBFSoldierVrArmTracking(
         matchingHead.positionX,
         matchingHead.positionY,
         -matchingHead.positionZ};
+    result.presentationYawRadians = presentationYaw;
+    result.presentationYawValid = presentationYawValid;
     return std::isfinite(result.headSkeletonPosition[0]) &&
         std::isfinite(result.headSkeletonPosition[1]) &&
         std::isfinite(result.headSkeletonPosition[2]);

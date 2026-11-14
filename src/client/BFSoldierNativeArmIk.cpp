@@ -200,6 +200,8 @@ struct RightHandFrameContext
     LONG controllerGeneration = 0;
     float observedBodyYawRadians = 0.0F;
     bool observedBodyYawValid = false;
+    float presentationYawRadians = 0.0F;
+    bool presentationYawValid = false;
     LONG activeItemIndex = -1;
     bool shoulderAnchorsValid = false;
     bool valid = false;
@@ -549,6 +551,8 @@ private:
                         leftRestore.boneRecord + kBoneFinalMatrixOffset) : nullptr,
                     rightFrame.observedBodyYawRadians,
                     rightFrame.observedBodyYawValid,
+                    rightFrame.presentationYawRadians,
+                    rightFrame.presentationYawValid,
                     rightFrame.controllerGeneration, rightFrame.soldier);
             }
             self->CaptureInjectedMotionProbe(rightRestore);
@@ -908,7 +912,9 @@ private:
         Matrix4& soldierTransform,
         std::array<float, 3>& trackedHeadSkeleton,
         float& observedBodyYawRadians,
-        bool& observedBodyYawValid) noexcept
+        bool& observedBodyYawValid,
+        float& presentationYawRadians,
+        bool& presentationYawValid) noexcept
     {
         sample = {};
         generation = 0;
@@ -916,6 +922,8 @@ private:
         trackedHeadSkeleton = {};
         observedBodyYawRadians = 0.0F;
         observedBodyYawValid = false;
+        presentationYawRadians = 0.0F;
+        presentationYawValid = false;
         const auto currentSoldierTransform =
             bfvr::ReadBf1942ObjectTransform(soldier);
         if (!currentSoldierTransform.has_value())
@@ -936,6 +944,8 @@ private:
         trackedHeadSkeleton = tracking.headSkeletonPosition;
         observedBodyYawRadians = tracking.observedBodyYawRadians;
         observedBodyYawValid = tracking.observedBodyYawValid;
+        presentationYawRadians = tracking.presentationYawRadians;
+        presentationYawValid = tracking.presentationYawValid;
         return true;
     }
 
@@ -984,6 +994,8 @@ private:
         std::array<float, 3> trackedHeadSkeleton = {};
         float observedBodyYawRadians = 0.0F;
         bool observedBodyYawValid = false;
+        float presentationYawRadians = 0.0F;
+        bool presentationYawValid = false;
         if (!ReadCurrentArmControllerSample(
                 soldier,
                 sample,
@@ -991,7 +1003,9 @@ private:
                 sameCallbackSoldierTransform,
                 trackedHeadSkeleton,
                 observedBodyYawRadians,
-                observedBodyYawValid) ||
+                observedBodyYawValid,
+                presentationYawRadians,
+                presentationYawValid) ||
             !IsTrackedGrip(sample.hands[kRightControllerHand]) ||
             !IsTrackedAim(sample.hands[kRightControllerHand]))
         {
@@ -1601,6 +1615,8 @@ private:
             frame.controllerGeneration = generation;
             frame.observedBodyYawRadians = observedBodyYawRadians;
             frame.observedBodyYawValid = observedBodyYawValid;
+            frame.presentationYawRadians = presentationYawRadians;
+            frame.presentationYawValid = presentationYawValid;
             frame.activeItemIndex = alignment.activeItemIndex;
             frame.valid = true;
             InterlockedIncrement(&injectedFrames_);
@@ -1657,6 +1673,8 @@ private:
         std::array<float, 3> trackedHeadSkeleton = {};
         float observedBodyYawRadians = 0.0F;
         bool observedBodyYawValid = false;
+        float presentationYawRadians = 0.0F;
+        bool presentationYawValid = false;
         if (!ReadCurrentArmControllerSample(
                 soldier,
                 sample,
@@ -1664,7 +1682,9 @@ private:
                 sameCallbackSoldierTransform,
                 trackedHeadSkeleton,
                 observedBodyYawRadians,
-                observedBodyYawValid) ||
+                observedBodyYawValid,
+                presentationYawRadians,
+                presentationYawValid) ||
             !IsTrackedGrip(sample.hands[kLeftControllerHand]))
         {
             leftGripRotationBinding_.ResetTransient();
