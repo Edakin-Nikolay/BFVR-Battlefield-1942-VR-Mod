@@ -710,6 +710,41 @@ private:
             {
                 InterlockedIncrement(&infantryComfortRejected);
             }
+            static const bool deepCameraYaw =
+                bfvr::IsDeepD3D8RuntimeDiagnostics(
+                    bfvr::ReadD3D8RuntimeDiagnosticLevel());
+            static DWORD lastCameraYawReportAt = 0;
+            static LONG cameraYawReports = 0;
+            if (deepCameraYaw && infantryBodyRead &&
+                cameraYawReports < 1200)
+            {
+                const DWORD now = GetTickCount();
+                if (cameraYawReports == 0 ||
+                    now - lastCameraYawReportAt >= 500)
+                {
+                    const auto yawDegrees =
+                        [](const stereo::Matrix4& matrix)
+                    {
+                        return std::atan2(
+                            matrix.values[2][0],
+                            matrix.values[2][2]) * 57.295779513F;
+                    };
+                    wchar_t message[320] = {};
+                    swprintf_s(
+                        message,
+                        L"CAM_YAW source=%.3f presented=%.3f "
+                        L"presentation=%.3f valid=%d rejected=%ld.",
+                        yawDegrees(source),
+                        yawDegrees(cameraSource),
+                        infantryPresentationYawRadians * 57.295779513F,
+                        infantryPresentationYawValid ? 1 : 0,
+                        InterlockedCompareExchange(
+                            &infantryComfortRejected, 0, 0));
+                    WriteLog(message);
+                    lastCameraYawReportAt = now;
+                    ++cameraYawReports;
+                }
+            }
         }
         MountedWeaponStationPose station = {};
         const bool stationValid = readable &&
