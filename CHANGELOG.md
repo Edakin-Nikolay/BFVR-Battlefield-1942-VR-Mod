@@ -25,9 +25,11 @@ the current version's section once it is released.
   right grip than a full foregrip span, so a close two-hand hold no longer turns
   tiny positional errors into large weapon swings. A normal foregrip span keeps
   the full directional response.
-- Two-hand support steering also fades beyond 120 degrees and rejects a support
-  direction beyond 150 degrees, preventing the unstable near-opposite rotation
-  that could suddenly pitch the weapon up or down.
+- Two-hand support steering now caps the applied swing at 120 degrees instead of
+  fading it back toward zero, so the correction no longer reverses as the support
+  hand moves further around. A support direction at or beyond 150 degrees is
+  rejected fail-closed, preventing the unstable near-opposite rotation that could
+  suddenly pitch the weapon up or down.
 
 ### Added
 

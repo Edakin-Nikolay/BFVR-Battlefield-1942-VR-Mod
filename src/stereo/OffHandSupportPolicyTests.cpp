@@ -1053,12 +1053,8 @@ bool SteeringIgnoresRadialMismatchAndHandlesOppositeDirection() noexcept
                !collapsed.has_value(),
                "collapsed tracked support span was accepted") &&
         Expect(
-            oppositeResult.has_value() &&
-                std::fabs(oppositeResult->appliedSwingRadians) <
-                    0.0001F &&
-                std::fabs(oppositeResult->gunWorld.values[2][2] - 1.0F) <
-                    0.0001F,
-            "opposite support direction was not rejected");
+            !oppositeResult.has_value(),
+            "opposite support direction was not rejected fail-closed");
 }
 
 bool SteeringFadesNearOppositeDirection() noexcept
@@ -1090,16 +1086,44 @@ bool SteeringFadesNearOppositeDirection() noexcept
             rejected,
             bfvr::stereo::kUnrestrictedOffHandWeaponSwingRadians,
             1.0F);
-    return Expect(
-               fadedResult.has_value() &&
-                   fadedResult->appliedSwingRadians > 0.0F &&
-                   fadedResult->appliedSwingRadians <
-                       fadedResult->requestedSwingRadians,
-               "near-opposite support direction did not fade") &&
-        Expect(
-            rejectedResult.has_value() &&
-                std::fabs(rejectedResult->appliedSwingRadians) < 0.0001F,
-            "far-opposite support direction was not rejected");
+    const float cap = 120.0F * kPi / 180.0F;
+    if (!Expect(
+            fadedResult.has_value() &&
+                std::fabs(fadedResult->appliedSwingRadians - cap) < 0.0001F &&
+                fadedResult->appliedSwingRadians <
+                    fadedResult->requestedSwingRadians,
+            "near-opposite support direction did not cap monotonically"))
+    {
+        return false;
+    }
+    if (!Expect(
+            !rejectedResult.has_value(),
+            "far-opposite support direction was not rejected fail-closed"))
+    {
+        return false;
+    }
+    // Monotonicity: sweeping the support direction from 0 to just under the
+    // reject angle must never reverse the applied correction.
+    float previous = 0.0F;
+    for (float deg = 0.0F; deg < 150.0F; deg += 5.0F)
+    {
+        const float a = deg * kPi / 180.0F;
+        const auto tracked = Translation(
+            2.0F + 0.4F * std::sin(a), 1.0F, -3.0F + 0.4F * std::cos(a));
+        const auto r = bfvr::stereo::ComputeBoundedOffHandWeaponSteering(
+            gun, predicted, tracked,
+            bfvr::stereo::kUnrestrictedOffHandWeaponSwingRadians, 1.0F);
+        if (!r.has_value())
+        {
+            return Expect(false, "monotonic sweep rejected a valid direction");
+        }
+        if (r->appliedSwingRadians + 0.0001F < previous)
+        {
+            return Expect(false, "applied swing reversed as request grew");
+        }
+        previous = r->appliedSwingRadians;
+    }
+    return true;
 }
 
 bool SteeringAttenuatesCloseHandSpan() noexcept

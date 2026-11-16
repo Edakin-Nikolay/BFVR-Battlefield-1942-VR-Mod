@@ -22,12 +22,11 @@ struct OffHandWeaponSteeringResult
 // the tracked left hand. Radial mismatch is ignored and no scale is applied.
 // Steering fades out when both hand spans fall below a full foregrip distance,
 // so a close two-hand grip cannot amplify positional micro-motion into a large
-// swing. A support direction beyond 120 degrees fades out and beyond 150
-// degrees is rejected, because a near-opposite hand makes the minimal rotation
-// axis unstable and can flip the weapon up or down. Degenerate and non-finite
-// spans fail closed. An exact opposite
-// direction uses a deterministic gun-basis axis so crossing the far side cannot
-// switch between a capped positive and negative swing.
+// swing. The applied swing is capped at 120 degrees so the response is
+// monotonic (no reverse correction as the hand moves further); a support
+// direction at or beyond 150 degrees is rejected fail-closed because a
+// near-opposite hand makes the minimal rotation axis unstable and can flip the
+// weapon up or down. Degenerate and non-finite spans fail closed.
 [[nodiscard]] std::optional<OffHandWeaponSteeringResult>
 ComputeBoundedOffHandWeaponSteering(
     const Matrix4& controllerGunWorld,

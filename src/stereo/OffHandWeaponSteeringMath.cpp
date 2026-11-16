@@ -195,15 +195,19 @@ ComputeBoundedOffHandWeaponSteering(
     {
         return std::nullopt;
     }
-    const float directionWeight = requestedAngle <= kFadeStartRadians
-        ? 1.0F
-        : requestedAngle >= kRejectRadians
-            ? 0.0F
-            : (kRejectRadians - requestedAngle) /
-                (kRejectRadians - kFadeStartRadians);
+    // Near-opposite support directions make the minimal rotation axis
+    // unstable. Rather than fading the applied angle back toward zero (which
+    // reverses the correction as the hand moves further), cap the swing at the
+    // fade-start angle so the response is monotonic, and reject beyond the
+    // reject angle fail-closed. Span attenuation stays continuous.
+    if (requestedAngle >= kRejectRadians)
+    {
+        return std::nullopt;
+    }
+    const float cappedAngle =
+        std::min(requestedAngle, kFadeStartRadians);
     const float appliedAngle =
-        std::min(requestedAngle * spanWeight * directionWeight,
-                 maximumSwingRadians);
+        std::min(cappedAngle * spanWeight, maximumSwingRadians);
     if (appliedAngle <= kDirectionEpsilon)
     {
         return OffHandWeaponSteeringResult{
