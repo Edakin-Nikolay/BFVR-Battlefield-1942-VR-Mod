@@ -65,4 +65,12 @@ void ClearAcceptedControllerInput() noexcept;
     bool& yawValid,
     DWORD maximumAgeMs) noexcept;
 
+// The render thread publishes the live infantry presentation heading every
+// request so the native arm hook can compensate the presentation advance that
+// occurs between sample publication and the skeleton callback.
+void PublishLiveInfantryPresentationYaw(
+    float yawRadians, bool yawValid) noexcept;
+[[nodiscard]] bool ReadLiveInfantryPresentationYaw(
+    float& yawRadians, bool& yawValid) noexcept;
+
 } // namespace bfvr

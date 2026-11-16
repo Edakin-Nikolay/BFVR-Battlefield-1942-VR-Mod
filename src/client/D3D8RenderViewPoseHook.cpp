@@ -2,6 +2,7 @@
 
 #include "client/BF1942HudToggle.h"
 #include "client/BFSoldierVrMotionFilter.h"
+#include "client/ControllerInputCache.h"
 #include "client/InfantryAuthoritativeAimRuntime.h"
 #include "client/MountedWeaponAimResolver.h"
 #include "client/D3D8RuntimeDiagnostics.h"
@@ -350,6 +351,8 @@ public:
         InterlockedExchange(
             &requestedInfantryPresentationYawValid,
             infantryPresentationYawValid ? 1 : 0);
+        bfvr::PublishLiveInfantryPresentationYaw(
+            infantryPresentationYawRadians, infantryPresentationYawValid);
         MemoryBarrier();
         InterlockedExchange(&requestedSequence, request.sequence);
     }
@@ -357,6 +360,7 @@ public:
     void ClearPose() noexcept
     {
         bfvr::ClearInfantryNativeAimCamera();
+        bfvr::PublishLiveInfantryPresentationYaw(0.0F, false);
         referenceHead = {};
         currentHead = {};
         lastSource = {};

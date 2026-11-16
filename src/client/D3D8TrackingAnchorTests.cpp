@@ -1,7 +1,10 @@
 #include "client/D3D8TrackingAnchor.h"
+#include "client/BFSoldierVrArmTracking.h"
+#include "client/ControllerInputCache.h"
 
 #include "stereo/StereoMath.h"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -468,6 +471,86 @@ bool TestControllerWorldPoseStaysFixedAcrossBodyYaw() noexcept
 }
 } // namespace
 
+bfvr::native_arm_math::Matrix4 SoldierYawMatrix(float yaw) noexcept
+{
+    bfvr::native_arm_math::Matrix4 m = {};
+    for (int i = 0; i < 4; ++i)
+    {
+        m.values[i][i] = 1.0F;
+    }
+    m.values[2][0] = std::sin(yaw);
+    m.values[2][2] = std::cos(yaw);
+    return m;
+}
+
+bool TestArmTrackingCompensatesPresentationAdvanceDuringTurn() noexcept
+{
+    constexpr float radians = 0.01745329251994329577F;
+    const auto rotate = [](float x, float z, float yaw) {
+        return std::array<float, 2>{
+            x * std::cos(yaw) + z * std::sin(yaw),
+            -x * std::sin(yaw) + z * std::cos(yaw)};
+    };
+    bfvr::D3D8RuntimeView head = {};
+    head.orientationW = 1.0F;
+    const bfvr::D3D8TrackingContext infantry = {
+        bfvr::D3D8TrackingContextKind::Infantry, 0x1000};
+    bfvr::D3D8RuntimeControllerSample raw = {};
+    raw.valid = raw.sessionFocused = true;
+    for (auto& hand : raw.hands)
+    {
+        hand.gripPose = {0.0F, 0.0F, 0.0F, 1.0F, 0.3F, 0.0F, 0.4F};
+        hand.aimPose = {0.0F, 0.0F, 0.0F, 1.0F, 0.3F, 0.0F, 0.4F};
+    }
+    const auto run = [&](float requestedDeg, float publishBodyDeg,
+                         float hookBodyDeg, bool advancePresentation) {
+        bfvr::D3D8TrackingAnchor anchor = {};
+        anchor.Update(head, true, infantry, 1'000'000'000LL, 0, false, true,
+            1.10F, 1.70F, 0.0F, {0.0F, publishBodyDeg * radians, true});
+        float publishPres = 0.0F;
+        anchor.ReadInfantryPresentationYaw(publishPres);
+        const auto rebased = anchor.RebaseControllerSample(raw);
+        bfvr::PublishAcceptedControllerInput(
+            rebased, raw, anchor.RebaseView(head), true,
+            publishBodyDeg * radians, true, publishPres, true);
+        float livePres = publishPres;
+        if (advancePresentation)
+        {
+            anchor.Update(head, true, infantry, 1'000'011'111LL, 0, false, true,
+                1.10F, 1.70F, 0.0F,
+                {requestedDeg, hookBodyDeg * radians, true});
+            anchor.ReadInfantryPresentationYaw(livePres);
+        }
+        bfvr::PublishLiveInfantryPresentationYaw(livePres, true);
+        bfvr::BFSoldierVrArmTracking tracking = {};
+        if (!bfvr::ReadFreshBFSoldierVrArmTracking(
+                SoldierYawMatrix(hookBodyDeg * radians), 1000, tracking))
+        {
+            return false;
+        }
+        const auto& grip = tracking.controllers.hands[1].gripPose;
+        const auto world = rotate(grip.positionX, -grip.positionZ,
+            hookBodyDeg * radians);
+        const auto expected = rotate(0.3F, -0.4F, livePres);
+        return NearlyEqual(world[0], expected[0]) &&
+            NearlyEqual(world[1], expected[1]);
+    };
+    // Fast artificial turn: body and presentation advance together between
+    // publication and the skeleton callback.
+    if (!run(30.0F, 0.0F, 30.0F, true))
+    {
+        std::fprintf(stderr, "presentation-advance residual\n");
+        return false;
+    }
+    // Pure body catch-up with no new presentation intent.
+    if (!run(30.0F, 0.0F, 10.0F, false))
+    {
+        std::fprintf(stderr, "body-catchup residual\n");
+        return false;
+    }
+    return true;
+}
+
 int main()
 {
     if (!TestMenuAnchorAndControllerUseOneRebasedSpace() ||
@@ -476,7 +559,8 @@ int main()
         !TestInfantryPresentationIgnoresNativeAimAndOwnsArtificialTurn() ||
         !TestInfantryPresentationTurnsThroughTransientBodyYawLoss() ||
         !TestControllerBodyBasisCorrectionMatchesFreshAnchorRebase() ||
-        !TestControllerWorldPoseStaysFixedAcrossBodyYaw())
+        !TestControllerWorldPoseStaysFixedAcrossBodyYaw() ||
+        !TestArmTrackingCompensatesPresentationAdvanceDuringTurn())
     {
         std::fprintf(
             stderr,

@@ -159,15 +159,32 @@ bool ReadFreshBFSoldierVrArmTracking(
             matchingHead.positionY,
             matchingHead.positionZ};
         D3D8RuntimeControllerSample adjustedHead = {};
+        // Compensate the body advance minus the presentation advance between
+        // publication and this callback. Using body alone leaves a residual
+        // proportional to turn speed while the artificial turn is active.
+        float livePresentationYaw = 0.0F;
+        bool livePresentationValid = false;
+        (void)bfvr::ReadLiveInfantryPresentationYaw(
+            livePresentationYaw, livePresentationValid);
+        float rebaseSourceYaw = observedBodyYaw;
+        float rebaseTargetYaw = *currentBodyYaw;
+        if (livePresentationValid && presentationYawValid)
+        {
+            const float bodyDelta = *currentBodyYaw - observedBodyYaw;
+            const float presentationDelta =
+                livePresentationYaw - presentationYaw;
+            rebaseSourceYaw = 0.0F;
+            rebaseTargetYaw = bodyDelta - presentationDelta;
+        }
         if (!RebaseInfantryControllerSampleToCurrentBodyYaw(
                 result.controllers,
-                observedBodyYaw,
-                *currentBodyYaw,
+                rebaseSourceYaw,
+                rebaseTargetYaw,
                 adjusted) ||
             !RebaseInfantryControllerSampleToCurrentBodyYaw(
                 headCarrier,
-                observedBodyYaw,
-                *currentBodyYaw,
+                rebaseSourceYaw,
+                rebaseTargetYaw,
                 adjustedHead))
         {
             return false;

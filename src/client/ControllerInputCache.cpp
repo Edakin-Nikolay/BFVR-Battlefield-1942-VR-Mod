@@ -20,6 +20,8 @@ struct ControllerInputCacheSlot
 
 std::array<ControllerInputCacheSlot, 2> g_slots = {};
 volatile LONG g_publishedGeneration = 0;
+volatile float g_livePresentationYaw = 0.0F;
+volatile LONG g_livePresentationValid = 0;
 
 LONG NextGeneration(LONG current) noexcept
 {
@@ -29,6 +31,23 @@ LONG NextGeneration(LONG current) noexcept
 
 namespace bfvr
 {
+void PublishLiveInfantryPresentationYaw(
+    const float yawRadians, const bool yawValid) noexcept
+{
+    g_livePresentationYaw = yawRadians;
+    MemoryBarrier();
+    InterlockedExchange(&g_livePresentationValid, yawValid ? 1 : 0);
+}
+
+bool ReadLiveInfantryPresentationYaw(
+    float& yawRadians, bool& yawValid) noexcept
+{
+    const LONG valid = InterlockedCompareExchange(&g_livePresentationValid, 0, 0);
+    yawRadians = g_livePresentationYaw;
+    yawValid = valid != 0;
+    return yawValid;
+}
+
 bool ReadLatestAcceptedPresentationYaw(
     float& yawRadians,
     bool& yawValid,

@@ -501,6 +501,8 @@ add_executable(BFVRAircraftControlMathTests
 
 add_executable(BFVRTrackingAnchorTests
   client/D3D8TrackingAnchor.cpp
+  client/ControllerInputCache.cpp
+  client/BFSoldierVrArmTracking.cpp
   client/D3D8TrackingAnchorTests.cpp
 )
 
