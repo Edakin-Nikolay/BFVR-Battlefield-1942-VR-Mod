@@ -447,7 +447,7 @@ Runtime P10.1–P10.3 не начат.
 | P4.2 | Если не виден: проекционный масштаб для zoom-only (переиспользовать `ScopeViewMath`) | P4.1 | `D3D8RenderViewPoseHook.cpp`, `ScopeViewMath.*` | относительный zoom сохраняется без head-locked оверлея | general |
 | P4.3 | Тесты + шлем | P4.2 | pure tests + чек-лист | масштаб монотонен, возврат к 1.0 без ступеньки | main + USER-VERIFY |
 | P4.4 | Docs/CHANGELOG | P4.3 | — | обновлено | text_routine |
-| P4.5 | Сначала геометрия близкого прицеливания: native fire-ray, controller target, метка на 50 м, оба глаза; затем линия мушки/целика | P1.7 | `CrosshairOverlay.cpp`, `WeaponAimOverlay.cpp`, pure-math tests | отделены параллакс, spread, basis и задержка; helper-тест не выдаётся за доказательство runtime-попадания | main + USER-VERIFY |
+| P4.5 | Сначала геометрия близкого прицеливания: native fire-ray, controller target, метка на 50 м, оба глаза; затем линия мушки/целика | P1.7 | `CrosshairOverlay.cpp`, `WeaponAimOverlay.cpp`, pure-math tests | отделены параллакс, spread, basis и задержка; helper-тест не выдаётся за доказательство runtime-попадания. **17.11:** модель `CloseRangeAimMath` + тесты (39/39) и протокол `docs/ru/close-range-aim-ru.md`; runtime-коррекция ждёт пер-оружейных barrel-данных и замера в шлеме | main + USER-VERIFY |
 
 ### P5. World-space оптика (п.3) — крупнейшая работа
 
